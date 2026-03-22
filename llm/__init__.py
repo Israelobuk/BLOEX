@@ -14,11 +14,13 @@ def _provider_label(base_url: str) -> str:
 def create_client(
     base_url: str,
     model: str,
+    api_key: str = "",
     timeout_seconds: int = 120,
 ):
     return OllamaClient(
         base_url=base_url,
         model=model,
+        api_key=api_key,
         timeout_seconds=timeout_seconds,
         backend_name='ollama',
         provider_label=_provider_label(base_url),

@@ -7,12 +7,14 @@ class LLMClient(ABC):
         self,
         base_url: str,
         model: str,
+        api_key: str = "",
         timeout_seconds: int = 120,
         backend_name: str = "",
         provider_label: str = "",
     ):
         self.base_url = base_url.rstrip("/")
         self.model = model.strip()
+        self.api_key = api_key.strip()
         self.timeout_seconds = timeout_seconds
         self.backend_name = backend_name or self.__class__.__name__.lower()
         self.provider_label = provider_label or self.__class__.__name__
@@ -29,6 +31,7 @@ class LLMClient(ABC):
         return {
             "base_url": self.base_url,
             "model": self.model,
+            "has_api_key": bool(self.api_key),
             "timeout_seconds": self.timeout_seconds,
             "backend": self.backend_name,
             "client": self.provider_label,

@@ -21,11 +21,20 @@ Use `.env` locally or Streamlit secrets in production.
 
 ```env
 BBE_BASE_URL=https://your-ollama-server.example.com
+BBE_API_KEY=
 BBE_MODEL=phi3:mini
 BBE_TEMPERATURE=0.1
-BBE_MAX_TOKENS=320
-BBE_TIMEOUT_SECONDS=35
+BBE_MAX_TOKENS=640
+BBE_TIMEOUT_SECONDS=60
 BBE_CRITIQUE_PASS=false
+```
+
+For a real hosted backend, you can point the app at Ollama Cloud. Because this app appends `/api/...` internally, use:
+
+```env
+BBE_BASE_URL=https://ollama.com
+BBE_API_KEY=your_ollama_api_key
+BBE_MODEL=gpt-oss:120b
 ```
 
 ## Local Run

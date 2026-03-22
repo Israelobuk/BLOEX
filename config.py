@@ -27,6 +27,7 @@ _load_dotenv_file()
 class AppConfig:
     model: str
     base_url: str
+    api_key: str = ''
     temperature: float = 0.1
     max_tokens: int = 640
     timeout_seconds: int = 60
@@ -63,6 +64,7 @@ def load_from_env(secrets: Optional[Mapping[str, Any]] = None) -> AppConfig:
     return AppConfig(
         model=_get_setting('BBE_MODEL', cfg.model, secrets).strip(),
         base_url=_get_setting('BBE_BASE_URL', cfg.base_url, secrets).strip(),
+        api_key=_get_setting('BBE_API_KEY', _get_setting('OLLAMA_API_KEY', cfg.api_key, secrets), secrets).strip(),
         temperature=float(_get_setting('BBE_TEMPERATURE', str(cfg.temperature), secrets)),
         max_tokens=int(_get_setting('BBE_MAX_TOKENS', str(cfg.max_tokens), secrets)),
         timeout_seconds=int(_get_setting('BBE_TIMEOUT_SECONDS', str(cfg.timeout_seconds), secrets)),

@@ -29,11 +29,13 @@ st.set_page_config(page_title="Black Box Explainer", layout="wide")
 MODEL_OPTIONS = [
     ("phi3:mini", "Phi-3 Mini"),
     ("llama3.1:8b", "Llama 3.1 8B"),
+    ("gpt-oss:120b", "GPT-OSS 120B"),
 ]
 
 MODEL_DESCRIPTIONS = {
     "phi3:mini": "Fast and lightweight. Good for shorter explanations and quicker response times.",
     "llama3.1:8b": "More capable and detailed. Better when you want stronger reasoning and fuller writeups.",
+    "gpt-oss:120b": "Hosted-scale reasoning model. Best when you want a stronger cloud backend with more depth.",
 }
 
 
@@ -344,6 +346,7 @@ def build_runtime_settings(defaults):
     return {
         "base_url": base_url.strip(),
         "model": model.strip(),
+        "api_key": defaults.api_key.strip(),
         "temperature": float(defaults.temperature),
         "max_tokens": int(defaults.max_tokens),
         "timeout_seconds": int(defaults.timeout_seconds),
@@ -361,6 +364,7 @@ def get_backend_status(settings: dict):
         client = create_client(
             base_url=settings["base_url"],
             model=settings["model"],
+            api_key=settings.get("api_key", ""),
             timeout_seconds=settings["timeout_seconds"],
         )
         return client.healthcheck()
@@ -454,6 +458,7 @@ def render_chat(settings: dict):
     client = create_client(
         base_url=settings["base_url"],
         model=settings["model"],
+        api_key=settings.get("api_key", ""),
         timeout_seconds=settings["timeout_seconds"],
     )
 
@@ -517,6 +522,7 @@ if run:
             client = create_client(
                 base_url=settings["base_url"],
                 model=settings["model"],
+                api_key=settings.get("api_key", ""),
                 timeout_seconds=settings["timeout_seconds"],
             )
             pipeline = ExplainerPipeline(client)
