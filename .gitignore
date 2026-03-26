@@ -1,0 +1,14 @@
+.venv/
+backend/.venv/
+__pycache__/
+*.pyc
+.env
+.streamlit/secrets.toml
+frontend/node_modules/
+frontend/dist/
+frontend/.vite-cache/
+backend/__pycache__/
+explain/__pycache__/
+llm/__pycache__/
+utils/__pycache__/
+backend/__pycache__/

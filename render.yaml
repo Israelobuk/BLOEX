@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: blackbox-explainer-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: BBE_BASE_URL
+        value: http://127.0.0.1:11434
+      - key: BBE_MODEL
+        value: phi3:mini
+      - key: BBE_TEMPERATURE
+        value: "0.1"
+      - key: BBE_MAX_TOKENS
+        value: "640"
+      - key: BBE_TIMEOUT_SECONDS
+        value: "60"
+      - key: BBE_CRITIQUE_PASS
+        value: "false"
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ALLOW_ORIGINS
+        sync: false
