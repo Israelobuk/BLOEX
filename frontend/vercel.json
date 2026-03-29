@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://blackbox-explainer-backend.onrender.com/api/:path*"
+    }
+  ]
+}
