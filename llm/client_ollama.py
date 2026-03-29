@@ -5,9 +5,6 @@ import requests
 from .client_base import LLMClient
 
 
-MAX_CONTINUATION_PASSES = 2
-
-
 class OllamaClient(LLMClient):
     """
     Ollama API docs:
@@ -64,30 +61,6 @@ class OllamaClient(LLMClient):
         except requests.RequestException as exc:
             return False, f"Cannot connect to {self.provider_label} at {self.base_url}. {exc}"
 
-    def _post_chat(
-        self,
-        url: str,
-        payload: Dict[str, object],
-        timeout_seconds: int | None = None,
-    ) -> Dict[str, object]:
-        response = requests.post(
-            url,
-            json=payload,
-            headers=self._headers(),
-            timeout=timeout_seconds or self.timeout_seconds,
-        )
-        response.raise_for_status()
-        data = response.json()
-        if not isinstance(data, dict):
-            raise RuntimeError(f"Unexpected Ollama response format: {data}")
-        return data
-
-    def _extract_content(self, data: Dict[str, object]) -> str:
-        try:
-            return str(data["message"]["content"])
-        except (KeyError, TypeError) as exc:
-            raise RuntimeError(f"Unexpected Ollama response format: {data}") from exc
-
     def _post_generate(
         self,
         url: str,
@@ -100,7 +73,10 @@ class OllamaClient(LLMClient):
             headers=self._headers(),
             timeout=timeout_seconds or self.timeout_seconds,
         )
-        response.raise_for_status()
+        if not response.ok:
+            body = response.text.strip()
+            detail = body[:500] if body else f"HTTP {response.status_code}"
+            raise RuntimeError(f"Ollama generate failed ({response.status_code}): {detail}")
         data = response.json()
         if not isinstance(data, dict):
             raise RuntimeError(f"Unexpected Ollama response format: {data}")
@@ -123,20 +99,6 @@ class OllamaClient(LLMClient):
         blocks.append("ASSISTANT:")
         return "\n\n".join(blocks)
 
-    def _response_was_cut_off(self, data: Dict[str, object], content: str, max_tokens: int) -> bool:
-        done_reason = str(data.get("done_reason", "")).strip().lower()
-        if done_reason in {"length", "max_tokens"}:
-            return True
-
-        stripped = content.rstrip()
-        if not stripped:
-            return False
-
-        if len(stripped.split()) < max(60, max_tokens // 3):
-            return False
-
-        return stripped.endswith(("-", ":", ",", ";", "(", "[", "{", "/"))
-
     def chat(
         self,
         messages: List[Dict[str, str]],
@@ -144,82 +106,22 @@ class OllamaClient(LLMClient):
         max_tokens: int,
         timeout_seconds: int | None = None,
     ) -> str:
-        url = f"{self.base_url}/api/chat"
         msg_text = "\n".join(str(m.get("content", "")) for m in messages)
         wants_json = (
             "OUTPUT JSON SCHEMA" in msg_text
             or "STRICT JSON" in msg_text
             or "Return this exact JSON object shape" in msg_text
         )
+        generate_url = f"{self.base_url}/api/generate"
         payload = {
             "model": self.model,
-            "messages": messages,
+            "prompt": self._messages_to_prompt(messages),
             "stream": False,
             "options": {
                 "temperature": temperature,
-                "num_predict": max_tokens,
             },
         }
         if wants_json:
             payload["format"] = "json"
-        try:
-            data = self._post_chat(url, payload, timeout_seconds=timeout_seconds)
-            content = self._extract_content(data)
-        except requests.HTTPError as exc:
-            status = exc.response.status_code if exc.response is not None else None
-            if status is None or status < 500:
-                raise
-
-            generate_url = f"{self.base_url}/api/generate"
-            generate_payload = {
-                "model": self.model,
-                "prompt": self._messages_to_prompt(messages),
-                "stream": False,
-                "options": {
-                    "temperature": temperature,
-                    "num_predict": max_tokens,
-                },
-            }
-            if wants_json:
-                generate_payload["format"] = "json"
-
-            data = self._post_generate(generate_url, generate_payload, timeout_seconds=timeout_seconds)
-            content = self._extract_generate_content(data)
-
-        if wants_json:
-            return content
-
-        current_messages = list(messages)
-        current_content = content
-
-        for _ in range(MAX_CONTINUATION_PASSES):
-            if not self._response_was_cut_off(data, current_content, max_tokens):
-                break
-
-            current_messages = current_messages + [
-                {"role": "assistant", "content": current_content},
-                {
-                    "role": "user",
-                    "content": "Continue exactly from where you stopped. Do not restart, summarize, or repeat earlier text.",
-                },
-            ]
-            continuation_payload = {
-                "model": self.model,
-                "prompt": self._messages_to_prompt(current_messages),
-                "stream": False,
-                "options": {
-                    "temperature": temperature,
-                    "num_predict": max_tokens,
-                },
-            }
-            data = self._post_generate(
-                f"{self.base_url}/api/generate",
-                continuation_payload,
-                timeout_seconds=timeout_seconds,
-            )
-            continuation = self._extract_generate_content(data).lstrip()
-            if not continuation:
-                break
-            current_content = f"{current_content.rstrip()} {continuation}".strip()
-
-        return current_content
+        data = self._post_generate(generate_url, payload, timeout_seconds=timeout_seconds)
+        return self._extract_generate_content(data)
