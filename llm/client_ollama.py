@@ -88,6 +88,41 @@ class OllamaClient(LLMClient):
         except (KeyError, TypeError) as exc:
             raise RuntimeError(f"Unexpected Ollama response format: {data}") from exc
 
+    def _post_generate(
+        self,
+        url: str,
+        payload: Dict[str, object],
+        timeout_seconds: int | None = None,
+    ) -> Dict[str, object]:
+        response = requests.post(
+            url,
+            json=payload,
+            headers=self._headers(),
+            timeout=timeout_seconds or self.timeout_seconds,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise RuntimeError(f"Unexpected Ollama response format: {data}")
+        return data
+
+    def _extract_generate_content(self, data: Dict[str, object]) -> str:
+        try:
+            return str(data["response"])
+        except KeyError as exc:
+            raise RuntimeError(f"Unexpected Ollama response format: {data}") from exc
+
+    def _messages_to_prompt(self, messages: List[Dict[str, str]]) -> str:
+        blocks: List[str] = []
+        for message in messages:
+            role = str(message.get("role", "user")).strip().upper() or "USER"
+            content = str(message.get("content", "")).strip()
+            if not content:
+                continue
+            blocks.append(f"{role}:\n{content}")
+        blocks.append("ASSISTANT:")
+        return "\n\n".join(blocks)
+
     def _response_was_cut_off(self, data: Dict[str, object], content: str, max_tokens: int) -> bool:
         done_reason = str(data.get("done_reason", "")).strip().lower()
         if done_reason in {"length", "max_tokens"}:
@@ -127,9 +162,29 @@ class OllamaClient(LLMClient):
         }
         if wants_json:
             payload["format"] = "json"
+        try:
+            data = self._post_chat(url, payload, timeout_seconds=timeout_seconds)
+            content = self._extract_content(data)
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status is None or status < 500:
+                raise
 
-        data = self._post_chat(url, payload, timeout_seconds=timeout_seconds)
-        content = self._extract_content(data)
+            generate_url = f"{self.base_url}/api/generate"
+            generate_payload = {
+                "model": self.model,
+                "prompt": self._messages_to_prompt(messages),
+                "stream": False,
+                "options": {
+                    "temperature": temperature,
+                    "num_predict": max_tokens,
+                },
+            }
+            if wants_json:
+                generate_payload["format"] = "json"
+
+            data = self._post_generate(generate_url, generate_payload, timeout_seconds=timeout_seconds)
+            content = self._extract_generate_content(data)
 
         if wants_json:
             return content
@@ -150,15 +205,19 @@ class OllamaClient(LLMClient):
             ]
             continuation_payload = {
                 "model": self.model,
-                "messages": current_messages,
+                "prompt": self._messages_to_prompt(current_messages),
                 "stream": False,
                 "options": {
                     "temperature": temperature,
                     "num_predict": max_tokens,
                 },
             }
-            data = self._post_chat(url, continuation_payload, timeout_seconds=timeout_seconds)
-            continuation = self._extract_content(data).lstrip()
+            data = self._post_generate(
+                f"{self.base_url}/api/generate",
+                continuation_payload,
+                timeout_seconds=timeout_seconds,
+            )
+            continuation = self._extract_generate_content(data).lstrip()
             if not continuation:
                 break
             current_content = f"{current_content.rstrip()} {continuation}".strip()
