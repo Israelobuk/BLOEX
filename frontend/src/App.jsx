@@ -1,8 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || "https://blackbox-explainer-backend.onrender.com"
-).replace(/\/$/, "");
+function resolveBackendBaseUrl() {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "");
+  }
+  const isLocalDev = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  if (isLocalDev) {
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
+  }
+  return "";
+}
+
+const API_BASE_URL = resolveBackendBaseUrl();
 const TABS = [
   { key: "answer", label: "Answer" },
   { key: "black_box_explanation", label: "Why The Model Said It" },
