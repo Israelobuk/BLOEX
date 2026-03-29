@@ -196,7 +196,7 @@ export default function App() {
   const [modelAnswer, setModelAnswer] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [activeModel, setActiveModel] = useState("phi3:mini");
+  const [activeModel, setActiveModel] = useState("tinyllama:latest");
   const [status, setStatus] = useState({ ok: false, status: "Checking backend..." });
   const [error, setError] = useState("");
 
