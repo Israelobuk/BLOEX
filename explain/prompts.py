@@ -24,22 +24,22 @@ def _base_sections(question: str, context: str, model_answer: str = "") -> str:
 
 def build_plaintext_fallback_prompt(question: str, context: str, model_answer: str = "") -> str:
     answer_line = (
-        "ANSWER: a direct answer to the question in 2 to 4 clear sentences"
+        "ANSWER: a direct answer to the question in 1 to 3 clear sentences"
         if not model_answer.strip()
-        else "ANSWER: a plain-English audit verdict in 2 to 4 clear sentences saying whether the model answer holds up against the context"
+        else "ANSWER: a plain-English audit verdict in 1 to 3 clear sentences saying whether the model answer holds up against the context"
     )
     black_box_line = (
-        "BLACK_BOX: explain in plain English how the model likely connected the context to the answer, what it emphasized, and what it may have glossed over in 3 to 5 clear sentences"
+        "BLACK_BOX: explain in plain English how the model likely connected the context to the answer, what it emphasized, and what it may have glossed over in 2 to 3 clear sentences"
         if not model_answer.strip()
-        else "BLACK_BOX: explain in plain English where the model likely focused, what it may have overweighted or missed, and why that produced the model answer in 3 to 5 clear sentences"
+        else "BLACK_BOX: explain in plain English where the model likely focused, what it may have overweighted or missed, and why that produced the model answer in 2 to 3 clear sentences"
     )
     uncertainty_line = (
-        "UNCERTAINTY: one meaningful caveat about where the answer may be too strong, too weak, or insufficiently supported in 1 to 2 clear sentences"
+        "UNCERTAINTY: one meaningful caveat about where the answer may be too strong, too weak, or insufficiently supported in 1 clear sentence"
     )
     followup_line = (
-        "FOLLOWUP: one short follow-up question, under 18 words, ending with a question mark, that would help a user test or improve the answer"
+        "FOLLOWUP: one short follow-up question, under 14 words, ending with a question mark, that would help a user test or improve the answer"
         if not model_answer.strip()
-        else "FOLLOWUP: one short follow-up question, under 18 words, ending with a question mark, that would help a user test or improve the model answer"
+        else "FOLLOWUP: one short follow-up question, under 14 words, ending with a question mark, that would help a user test or improve the model answer"
     )
 
     return f"""{_base_sections(question, context, model_answer)}
@@ -48,10 +48,10 @@ Return plain text in exactly this format:
 {answer_line}
 {black_box_line}
 QUOTE: exact quote copied verbatim from the context
-ASSUMPTION: one meaningful hidden assumption or interpretation step in 1 to 2 clear sentences
+ASSUMPTION: one meaningful hidden assumption or interpretation step in 1 clear sentence
 {uncertainty_line}
 CONFIDENCE: low, medium, or high
-CONFIDENCE_REASON: a short, plain-English explanation of that confidence in 1 to 2 sentences
+CONFIDENCE_REASON: a short, plain-English explanation of that confidence in 1 sentence
 {followup_line}
 
 Write for a curious user, not for a professor.

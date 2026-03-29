@@ -8,11 +8,9 @@ from utils.logging import build_trace_log
 from utils.text import chunk_text
 
 
-MAX_CONTEXT_CHARS_FOR_MODEL = 900
-FAST_RETRY_CONTEXT_CHARS = 450
-FAST_RETRY_MAX_TOKENS = 220
-FINAL_RETRY_MAX_TOKENS = 180
-FIELD_RETRY_MAX_TOKENS = 140
+MAX_CONTEXT_CHARS_FOR_MODEL = 600
+FAST_RETRY_CONTEXT_CHARS = 320
+FAST_RETRY_MAX_TOKENS = 120
 
 
 def _first_sentence(text: str) -> str:
@@ -292,6 +290,65 @@ def patch_from_field_text(field: str, text: str) -> Dict[str, Any]:
     return {}
 
 
+def fill_missing_defaults(result: Dict[str, Any], question: str, context: str, model_answer: str = "") -> Dict[str, Any]:
+    patched = dict(result)
+
+    if not (patched.get("answer") or "").strip():
+        if model_answer.strip():
+            patched["answer"] = "The pasted answer may be directionally useful, but it still needs review."
+        else:
+            patched["answer"] = "The source does not support a confident answer yet."
+
+    if not (patched.get("black_box_explanation") or "").strip():
+        if model_answer.strip():
+            patched["black_box_explanation"] = (
+                "The model seems to have leaned on the main claim in the pasted answer, "
+                "but the full reasoning trace was incomplete."
+            )
+        else:
+            patched["black_box_explanation"] = (
+                "The model seems to have focused on the most obvious part of the source, "
+                "but the full reasoning trace was incomplete."
+            )
+
+    if not patched.get("assumptions"):
+        patched["assumptions"] = [
+            "This review assumes the pasted answer reflects the main claim the user wants checked."
+            if model_answer.strip()
+            else "This review assumes the source contains the main information needed to answer the question."
+        ]
+
+    if not patched.get("uncertainty"):
+        patched["uncertainty"] = [
+            "Some parts may still be under-supported because the model returned an incomplete explanation."
+        ]
+
+    if not patched.get("followups"):
+        patched["followups"] = [_best_followup(question)]
+
+    if not (patched.get("confidence") or "").strip():
+        patched["confidence"] = "low"
+
+    if not (patched.get("confidence_reason") or "").strip():
+        patched["confidence_reason"] = "Confidence is limited because the model returned incomplete structured output."
+
+    if not patched.get("evidence_claims") and context.strip():
+        quote = _first_sentence(context)[:220]
+        if quote:
+            patched["evidence_claims"] = [
+                {
+                    "claim": "Closest available source snippet",
+                    "support_reason": "The model did not return a full evidence extraction, so the app surfaced a simple source snippet.",
+                    "quote": quote,
+                    "start": None,
+                    "end": None,
+                    "verified": False,
+                }
+            ]
+
+    return normalize_result(patched)
+
+
 class ExplainerPipeline:
     def __init__(self, client):
         self.client = client
@@ -326,28 +383,28 @@ class ExplainerPipeline:
 
     def _run_completion_retry(self, question: str, context: str, prior_output: str, missing: List[str], model_answer: str = "") -> str:
         answer_hint = (
-            "ANSWER: a direct answer to the question in 2 to 4 simple sentences"
+            "ANSWER: a direct answer to the question in 1 to 3 simple sentences"
             if not model_answer.strip()
-            else "ANSWER: a plain-English audit verdict in 2 to 4 simple sentences saying whether the model answer holds up against the context"
+            else "ANSWER: a plain-English audit verdict in 1 to 3 simple sentences saying whether the model answer holds up against the context"
         )
         black_box_hint = (
-            "BLACK_BOX: explain in plain English how the model likely connected the context to the answer, what it emphasized, and what it may have glossed over in 3 to 5 simple sentences"
+            "BLACK_BOX: explain in plain English how the model likely connected the context to the answer, what it emphasized, and what it may have glossed over in 2 to 3 simple sentences"
             if not model_answer.strip()
-            else "BLACK_BOX: explain in plain English where the model likely focused, what it overweighted or missed, and why that produced the model answer in 3 to 5 simple sentences"
+            else "BLACK_BOX: explain in plain English where the model likely focused, what it overweighted or missed, and why that produced the model answer in 2 to 3 simple sentences"
         )
         followup_hint = (
-            "FOLLOWUP: one short follow-up question, under 18 words, ending with a question mark, that would help a user test or improve the answer"
+            "FOLLOWUP: one short follow-up question, under 14 words, ending with a question mark, that would help a user test or improve the answer"
             if not model_answer.strip()
-            else "FOLLOWUP: one short follow-up question, under 18 words, ending with a question mark, that would help a user test or improve the model answer"
+            else "FOLLOWUP: one short follow-up question, under 14 words, ending with a question mark, that would help a user test or improve the model answer"
         )
         field_hints = {
             "ANSWER": answer_hint,
             "BLACK_BOX": black_box_hint,
             "QUOTE": "QUOTE: an exact quote copied verbatim from the context",
-            "ASSUMPTION": "ASSUMPTION: one meaningful hidden assumption or interpretation step in 1 to 2 simple sentences",
-            "UNCERTAINTY": "UNCERTAINTY: one caveat saying where the answer may be too strong, too weak, or under-supported in 1 to 2 simple sentences",
+            "ASSUMPTION": "ASSUMPTION: one meaningful hidden assumption or interpretation step in 1 simple sentence",
+            "UNCERTAINTY": "UNCERTAINTY: one caveat saying where the answer may be too strong, too weak, or under-supported in 1 simple sentence",
             "CONFIDENCE": "CONFIDENCE: low, medium, or high",
-            "CONFIDENCE_REASON": "CONFIDENCE_REASON: a short plain-English explanation of that confidence in 1 to 2 sentences",
+            "CONFIDENCE_REASON": "CONFIDENCE_REASON: a short plain-English explanation of that confidence in 1 sentence",
             "FOLLOWUP": followup_hint,
         }
         missing_lines = "\n".join(field_hints[field] for field in missing)
@@ -378,115 +435,6 @@ class ExplainerPipeline:
             retry_messages,
             temperature=0.0,
             max_tokens=FAST_RETRY_MAX_TOKENS,
-            timeout_seconds=max(self.client.timeout_seconds, 35),
-        )
-
-    def _run_final_retry(self, question: str, context: str, missing: List[str], model_answer: str = "") -> str:
-        answer_hint = (
-            "ANSWER: a direct answer to the question in 2 to 4 simple sentences"
-            if not model_answer.strip()
-            else "ANSWER: a plain-English audit verdict in 2 to 4 simple sentences saying whether the model answer holds up against the context"
-        )
-        black_box_hint = (
-            "BLACK_BOX: explain in plain English how the model likely connected the context to the answer, what it emphasized, and what it may have glossed over in 3 to 5 simple sentences"
-            if not model_answer.strip()
-            else "BLACK_BOX: explain in plain English where the model likely focused, what it overweighted or missed, and why that produced the model answer in 3 to 5 simple sentences"
-        )
-        followup_hint = (
-            "FOLLOWUP: one short follow-up question, under 18 words, ending with a question mark, that would help a user test or improve the answer"
-            if not model_answer.strip()
-            else "FOLLOWUP: one short follow-up question, under 18 words, ending with a question mark, that would help a user test or improve the model answer"
-        )
-        field_hints = {
-            "ANSWER": answer_hint,
-            "BLACK_BOX": black_box_hint,
-            "QUOTE": "QUOTE: an exact quote copied verbatim from the context",
-            "ASSUMPTION": "ASSUMPTION: one meaningful hidden assumption or interpretation step in 1 to 2 simple sentences",
-            "UNCERTAINTY": "UNCERTAINTY: one caveat saying where the answer may be too strong, too weak, or under-supported in 1 to 2 simple sentences",
-            "CONFIDENCE": "CONFIDENCE: low, medium, or high",
-            "CONFIDENCE_REASON": "CONFIDENCE_REASON: a short plain-English explanation of that confidence in 1 to 2 sentences",
-            "FOLLOWUP": followup_hint,
-        }
-        missing_lines = "\n".join(field_hints[field] for field in missing)
-        model_answer_block = f"MODEL_ANSWER:\n{model_answer}\n\n" if model_answer.strip() else ""
-        retry_messages = [
-            {
-                "role": "system",
-                "content": (
-                    "Answer with only labeled plain text. No JSON. No markdown. No extra text. "
-                    "Use plain, everyday language."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"Use only the provided question, context, and optional model answer.\n\nQUESTION:\n{question}\n\n{model_answer_block}CONTEXT:\n{context[:FAST_RETRY_CONTEXT_CHARS]}\n\n"
-                    "Fill every missing label below.\n"
-                    "Return exactly one line per label.\n"
-                    "Do not add any other text.\n\n"
-                    f"{missing_lines}"
-                ),
-            },
-        ]
-        return self._chat(
-            retry_messages,
-            temperature=0.0,
-            max_tokens=FINAL_RETRY_MAX_TOKENS,
-            timeout_seconds=max(self.client.timeout_seconds, 35),
-        )
-
-    def _run_single_field_retry(self, question: str, context: str, field: str, model_answer: str = "") -> str:
-        answer_prompt = (
-            "Write a direct answer to the question in 2 to 4 simple sentences using only the context. No label. No markdown."
-            if not model_answer.strip()
-            else "Write a plain-English audit verdict in 2 to 4 simple sentences saying whether the model answer holds up against the context. No label. No markdown."
-        )
-        black_box_prompt = (
-            "Write a plain-English explanation in 3 to 5 simple sentences showing how the model likely connected the context to the answer, what it emphasized, and what it may have glossed over. No label. No markdown."
-            if not model_answer.strip()
-            else "Write a plain-English explanation in 3 to 5 simple sentences showing where the model likely focused, what it may have overweighted or missed, and why that produced the model answer. No label. No markdown."
-        )
-        uncertainty_prompt = (
-            "Write one meaningful caveat in 1 to 2 simple sentences saying where the answer may be too strong, too weak, or under-supported. No label. No markdown."
-        )
-        followup_prompt = (
-            "Write one short follow-up question using only the context that would help a user test or improve the answer. It must end with a question mark and stay under 18 words. No label. No markdown."
-            if not model_answer.strip()
-            else "Write one short follow-up question using only the context that would help a user test or improve the model answer. It must end with a question mark and stay under 18 words. No label. No markdown."
-        )
-        prompts = {
-            "ANSWER": answer_prompt,
-            "BLACK_BOX": black_box_prompt,
-            "QUOTE": "Write an exact quote copied verbatim from the context. No label. No markdown.",
-            "ASSUMPTION": "Write one meaningful hidden assumption or interpretation step the answer depends on in 1 to 2 simple sentences. No label. No markdown.",
-            "UNCERTAINTY": uncertainty_prompt,
-            "CONFIDENCE": "Reply with one word only: low, medium, or high.",
-            "CONFIDENCE_REASON": "Write a short plain-English explanation of the confidence in 1 to 2 sentences using only the context. No label. No markdown.",
-            "FOLLOWUP": followup_prompt,
-        }
-        model_answer_block = f"MODEL_ANSWER:\n{model_answer}\n\n" if model_answer.strip() else ""
-        retry_messages = [
-            {
-                "role": "system",
-                "content": (
-                    "Use only the provided context. Be clear, specific, and sufficiently detailed. "
-                    "Use plain, everyday language and avoid academic wording."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"QUESTION:\n{question}\n\n"
-                    f"{model_answer_block}"
-                    f"CONTEXT:\n{context[:FAST_RETRY_CONTEXT_CHARS]}\n\n"
-                    f"{prompts[field]}"
-                ),
-            },
-        ]
-        return self._chat(
-            retry_messages,
-            temperature=0.0,
-            max_tokens=FIELD_RETRY_MAX_TOKENS,
             timeout_seconds=max(self.client.timeout_seconds, 35),
         )
 
@@ -527,21 +475,8 @@ class ExplainerPipeline:
             result = merge_results(result, retry_result)
 
         if not result_is_complete(result):
-            steps.append("llm_final_retry_call")
-            final_retry_text = self._run_final_retry(question, context_for_model, missing_fields(result), model_answer=model_answer)
-            final_retry_result = normalize_result(parse_plaintext_fallback(final_retry_text))
-            raw_text = raw_text + "\n" + final_retry_text
-            result = merge_results(result, final_retry_result)
-
-        if not result_is_complete(result):
-            steps.append("llm_single_field_retry_call")
-            for field in missing_fields(result):
-                field_text = self._run_single_field_retry(question, context_for_model, field, model_answer=model_answer)
-                raw_text = raw_text + "\n" + field_text
-                result = merge_results(result, patch_from_field_text(field, field_text))
-
-        if not result_is_complete(result):
-            raise RuntimeError("Model returned incomplete structured output.")
+            steps.append("fill_missing_defaults")
+            result = fill_missing_defaults(result, question, context, model_answer=model_answer)
 
         result = verify_evidence_claims(result, context)
         result = add_question_relevance(result, question)
