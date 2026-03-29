@@ -15,6 +15,104 @@ FINAL_RETRY_MAX_TOKENS = 180
 FIELD_RETRY_MAX_TOKENS = 140
 
 
+def _first_sentence(text: str) -> str:
+    clean = " ".join(str(text or "").split()).strip()
+    if not clean:
+        return ""
+    for sep in ".!?":
+        if sep in clean:
+            return clean.split(sep, 1)[0].strip()
+    return clean[:180].strip()
+
+
+def _best_followup(question: str) -> str:
+    clean = " ".join(str(question or "").split()).strip()
+    if not clean:
+        return "What evidence would make this answer more trustworthy?"
+    if clean.endswith("?"):
+        return f"What evidence best supports the answer to: {clean}"
+    return f"What evidence best supports the answer to: {clean}?"
+
+
+def build_fallback_result(
+    question: str,
+    context: str,
+    model_answer: str,
+    backend_meta: Dict[str, Any],
+    temperature: float,
+    max_tokens: int,
+    error_message: str,
+) -> Dict[str, Any]:
+    answer_text = " ".join(str(model_answer or "").split()).strip()
+    lead = _first_sentence(answer_text)
+    context_text = " ".join(str(context or "").split()).strip()
+
+    result = default_result()
+    result["answer"] = answer_text or "No model answer was provided to analyze."
+    result["audit_verdict"] = (
+        "The full explainer model failed, so this is a lightweight fallback review of the pasted answer."
+    )
+    result["black_box_explanation"] = (
+        f"The pasted answer appears to focus most on '{lead}'." if lead else
+        "The pasted answer could not be deeply analyzed because the model backend failed during generation."
+    )
+    result["assumptions"] = [
+        "This fallback review assumes the pasted answer reflects the main claim the user wants inspected."
+    ]
+    result["uncertainty"] = [
+        "This is a fallback result, not a full model-generated explanation, so treat it as a rough audit only.",
+        "Without a stable model response, the app cannot reliably break down supporting vs unsupported reasoning.",
+    ]
+    if not context_text:
+        result["uncertainty"].append(
+            "No source context was provided, so the app cannot verify whether the answer is actually grounded."
+        )
+
+    result["confidence"] = "low"
+    result["confidence_reason"] = (
+        "Confidence is low because the explainer model failed during generation, so this result is only a fallback audit."
+    )
+    result["followups"] = [_best_followup(question)]
+
+    if context_text:
+        quote = _first_sentence(context_text)[:220]
+        if quote:
+            result["evidence_claims"] = [
+                {
+                    "claim": "Closest available context snippet from fallback mode",
+                    "support_reason": "The model-backed extraction failed, so the app surfaced a basic source snippet instead.",
+                    "quote": quote,
+                    "start": None,
+                    "end": None,
+                    "verified": False,
+                }
+            ]
+
+    result = verify_evidence_claims(result, context)
+    result = add_question_relevance(result, question)
+    if model_answer.strip():
+        original_answer = result.get("answer", "")
+        result["audited_answer"] = model_answer
+        result["answer"] = model_answer
+        result = detect_answer_overreach(result, question, context)
+        result["answer"] = original_answer
+    else:
+        result = detect_answer_overreach(result, question, context)
+    result = adjust_confidence(result)
+    result = build_confidence_breakdown(result)
+    result["highlighted_context"] = build_highlighted_context(context, result.get("evidence_claims", []))
+    result["trace_log"] = build_trace_log(
+        backend_meta=backend_meta,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        steps=["fallback_mode"],
+        raw_preview=str(error_message)[:500],
+    )
+    result["fallback_mode"] = True
+    result["fallback_error"] = error_message
+    return result
+
+
 def parse_plaintext_fallback(text: str) -> Dict[str, Any]:
     parsed: Dict[str, Any] = {
         "assumptions": [],
