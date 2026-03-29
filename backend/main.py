@@ -16,7 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import load_from_env
-from explain.pipeline import ExplainerPipeline
+from explain.pipeline import ExplainerPipeline, build_fallback_result
 from llm import create_client
 
 
@@ -162,7 +162,15 @@ def explain(request: ExplainRequest):
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to run the explainer. {exc}") from exc
+        result = build_fallback_result(
+            question=request.question.strip(),
+            model_answer=request.model_answer.strip(),
+            context=request.context,
+            backend_meta=client.metadata(),
+            temperature=settings.temperature,
+            max_tokens=settings.max_tokens,
+            error_message=str(exc),
+        )
 
     result["selected_model"] = model
     return result
