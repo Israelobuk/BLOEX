@@ -51,14 +51,13 @@ def _parse_bool(value: str | None, default: bool = False) -> bool:
 def _cors_origins() -> list[str]:
     raw = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
     if raw:
+        if raw == "*":
+            return ["*"]
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
     frontend_url = os.getenv("FRONTEND_URL", "").strip()
     if frontend_url:
         return [frontend_url]
-    return [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
+    return ["*"]
 
 
 class ExplainRequest(BaseModel):
