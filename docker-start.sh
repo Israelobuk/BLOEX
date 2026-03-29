@@ -2,9 +2,9 @@
 set -euo pipefail
 
 export BBE_BASE_URL="${BBE_BASE_URL:-http://127.0.0.1:11434}"
-export BBE_MODEL="${BBE_MODEL:-llama3.2:latest}"
+export BBE_MODEL="${BBE_MODEL:-tinyllama:latest}"
 export BBE_TEMPERATURE="${BBE_TEMPERATURE:-0.1}"
-export BBE_MAX_TOKENS="${BBE_MAX_TOKENS:-320}"
+export BBE_MAX_TOKENS="${BBE_MAX_TOKENS:-120}"
 export BBE_TIMEOUT_SECONDS="${BBE_TIMEOUT_SECONDS:-60}"
 export BBE_CRITIQUE_PASS="${BBE_CRITIQUE_PASS:-false}"
 export OLLAMA_HOST="${OLLAMA_HOST:-127.0.0.1:11434}"

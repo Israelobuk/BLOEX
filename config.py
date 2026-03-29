@@ -35,9 +35,9 @@ class AppConfig:
 
 
 DEFAULT_CONFIG = AppConfig(
-    model='llama3.2:latest',
+    model='tinyllama:latest',
     base_url='http://127.0.0.1:11434',
-    max_tokens=320,
+    max_tokens=120,
 )
 
 
