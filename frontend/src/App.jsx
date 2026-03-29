@@ -176,6 +176,21 @@ function ChatPanel({ ready, selectedModel, question, modelAnswer, context }) {
   );
 }
 
+async function readJsonResponse(response) {
+  const rawText = await response.text();
+  let payload = {};
+
+  if (rawText.trim()) {
+    try {
+      payload = JSON.parse(rawText);
+    } catch {
+      payload = { detail: rawText.trim() };
+    }
+  }
+
+  return payload;
+}
+
 export default function App() {
   const [question, setQuestion] = useState("");
   const [modelAnswer, setModelAnswer] = useState("");
@@ -186,10 +201,16 @@ export default function App() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
     async function bootstrap() {
       try {
         const healthResponse = await fetch(`${API_BASE_URL}/api/health`);
-        const health = await healthResponse.json();
+        const health = await readJsonResponse(healthResponse);
+
+        if (cancelled) {
+          return;
+        }
 
         if (health.selectedModel) {
           setActiveModel(health.selectedModel);
@@ -199,14 +220,23 @@ export default function App() {
           status: health.status || "Backend unavailable.",
         });
       } catch (fetchError) {
+        if (cancelled) {
+          return;
+        }
         setStatus({
           ok: false,
-          status: fetchError instanceof Error ? fetchError.message : "Failed to reach backend.",
+          status: "Backend is waking up or unreachable right now.",
         });
       }
     }
 
     bootstrap();
+
+    const timer = window.setInterval(bootstrap, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   async function handleExplain(event) {
@@ -221,11 +251,6 @@ export default function App() {
       setError("The model answer is required.");
       return;
     }
-    if (!status.ok) {
-      setError("Model service is not ready. Check the backend deployment.");
-      return;
-    }
-
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/explain`, {
@@ -237,13 +262,25 @@ export default function App() {
           model: activeModel,
         }),
       });
-      const payload = await response.json();
+      const payload = await readJsonResponse(response);
       if (!response.ok) {
         throw new Error(payload.detail || "Failed to run the auditor.");
       }
       setResult(payload);
+      if (payload.selected_model) {
+        setActiveModel(payload.selected_model);
+      }
+      setStatus({
+        ok: true,
+        status: "Backend responded successfully.",
+      });
     } catch (runError) {
-      setError(runError instanceof Error ? runError.message : "Failed to run the auditor.");
+      const message = runError instanceof Error ? runError.message : "Failed to run the auditor.";
+      setError(message);
+      setStatus({
+        ok: false,
+        status: message,
+      });
     } finally {
       setLoading(false);
     }
