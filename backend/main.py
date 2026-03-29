@@ -36,7 +36,8 @@ Rules:
 """.strip()
 
 MODEL_OPTIONS = [
-    {"value": "phi3:mini", "label": "Phi-3 Mini", "description": "Fast and lightweight. Good for shorter explanations and quicker response times."},
+    {"value": "llama3.2:latest", "label": "Llama 3.2", "description": "Balanced default. Closer to the working Ollama setup used in the market analyzer project."},
+    {"value": "phi3:mini", "label": "Phi-3 Mini", "description": "Fast and lightweight, but more fragile for longer structured outputs."},
     {"value": "llama3.1:8b", "label": "Llama 3.1 8B", "description": "More capable and detailed. Better when you want stronger reasoning and fuller writeups."},
     {"value": "gpt-oss:120b", "label": "GPT-OSS 120B", "description": "Hosted-scale reasoning model. Best when you want a stronger cloud backend with more depth."},
 ]
@@ -78,7 +79,7 @@ class FollowupRequest(BaseModel):
 def _load_settings():
     settings = load_from_env()
     base_url = settings.base_url.strip() or "http://127.0.0.1:11434"
-    model = settings.model.strip() or "phi3:mini"
+    model = settings.model.strip() or "llama3.2:latest"
     return replace(settings, base_url=base_url, model=model)
 
 
