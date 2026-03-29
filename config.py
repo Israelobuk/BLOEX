@@ -35,8 +35,9 @@ class AppConfig:
 
 
 DEFAULT_CONFIG = AppConfig(
-    model='phi3:mini',
+    model='llama3.2:latest',
     base_url='http://127.0.0.1:11434',
+    max_tokens=320,
 )
 
 
