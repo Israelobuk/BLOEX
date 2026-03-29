@@ -323,6 +323,17 @@ export default function App() {
             </p>
           </section>
 
+          {result.fallback_mode ? (
+            <section className="panel-shell">
+              <div className="status-banner warn">
+                <strong>Model generation failed, so the app used fallback mode.</strong>
+                <div className="metric-caption" style={{ marginTop: "8px", whiteSpace: "pre-wrap" }}>
+                  {result.fallback_error || "No backend error details were returned."}
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           <section className="panel-shell">
             <ResultTabs result={result} />
           </section>
