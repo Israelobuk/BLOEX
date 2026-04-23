@@ -1,145 +1,68 @@
 # Black Box Explainer
 
-Black Box Explainer is an LLM answer analysis tool built to help users inspect, question, and better understand AI-generated responses.
+Inspect AI answers before you trust them.
 
-Instead of treating an LLM answer as something to blindly trust, the project is designed to break the response down into a more interpretable format:
+Black Box Explainer is a product-focused analysis layer for LLM outputs. It takes a user question and model response, then returns a structured breakdown of what was said, why it was likely said, where confidence is weak, and what should be checked next.
 
-- what the answer is saying
-- why the model likely landed on that answer
-- what assumptions the answer depends on
-- where the reasoning may still be weak
-- what follow-up questions a user should ask next
+## Product Overview
 
-The goal is to make black-box model behavior easier to evaluate, especially when a user wants to understand whether an answer sounds plausible, overconfident, incomplete, or weakly supported.
+Black Box Explainer helps teams move from "this sounds right" to "this is reviewable."
 
-## What The Project Does
+Core product goals:
 
-The app takes:
+- make AI answers inspectable and auditable
+- highlight assumptions and weak reasoning quickly
+- surface follow-up questions that improve decision quality
+- provide a consistent review framework across prompts and models
 
-- the original user question
-- the LLM answer being reviewed
+## Core Experience
 
-and returns a structured analysis that helps the user inspect the response rather than simply accept it at face value.
+Every analysis is organized into clear product views:
 
-The output is organized into a few core views:
+- `Answer`: what the response is claiming
+- `Why The Model Said It`: likely reasoning path and emphasis
+- `Supporting Context`: extracted support signals and evidence hints
+- `Gaps & Next Questions`: uncertainty, assumptions, and next checks
 
-- `Answer`: a direct audit-style read of the response
-- `Why The Model Said It`: a plain-language explanation of what the model likely focused on
-- `Supporting Context`: extracted support signals and evidence claims when available
-- `Gaps & Next Questions`: assumptions, uncertainty, and suggested follow-up questions
+## Who This Is For
 
-## Why It Matters
+- teams using LLMs in research, operations, or decision support
+- builders who want explainability baked into AI UX
+- reviewers who need faster quality checks on generated content
+- educators and learners comparing response quality across prompts
 
-Large language models can produce answers that sound polished even when the reasoning is incomplete, weakly supported, or overly confident.
+## Why Teams Use It
 
-This project explores a practical interpretability workflow for AI outputs by helping users:
+- reduces over-trust in polished but weak responses
+- creates a repeatable QA process for AI-generated answers
+- improves follow-up prompting and downstream decisions
+- makes model behavior easier to communicate to non-technical users
 
-- inspect how an answer was formed
-- identify weak reasoning or unsupported claims
-- see what the answer appears to rely on
-- ask sharper follow-up questions
+## Product Status
 
-## Current Scope
+Black Box Explainer is actively evolving as a practical explainability product with a React frontend and Python backend.
 
-This is a local-first project designed around a local Ollama backend.
+Primary app modules:
 
-The full workflow works best when run on your own machine with a local model. Public deployment is possible for the frontend, but hosted Ollama inference on free-tier infrastructure is memory-constrained, so the most reliable version of the project is the local setup described below.
+- `frontend/`
+- `backend/`
+- `explain/`
+- `llm/`
+- `utils/`
 
-## Local Setup
+## UI Update (In Progress)
 
-### 1. Start Ollama
+The UI is being updated to be cleaner, more intuitive, and fully responsive, with improved visual hierarchy and a clearer step-by-step analysis flow across desktop and mobile.
 
-If Ollama is not already running:
-
-```powershell
-ollama serve
-```
-
-Pull the model once if needed:
-
-```powershell
-ollama pull tinyllama:latest
-```
-
-### 2. Run the backend
-
-```powershell
-cd backend
-.\.venv\Scripts\activate
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
-```
-
-### 3. Run the frontend
-
-```powershell
-cd frontend
-npm run dev
-```
-
-### 4. Open the app
-
-```text
-http://127.0.0.1:5173
-```
-
-## Example Workflow
-
-1. Paste the original question that was asked to the LLM.
-2. Paste the exact LLM answer you want to inspect.
-3. Run the explainer.
-4. Review the result across the explanation tabs.
-5. Use the follow-up section to pressure-test weak points in the response.
-
-## Project Structure
+## Repository Layout
 
 ```text
 blackbox_explainer/
-  backend/      API layer
-  frontend/     User interface
-  explain/      Core explanation and analysis pipeline
-  llm/          LLM client interfaces
+  frontend/     Product UI
+  backend/      API and orchestration
+  explain/      Core explanation pipeline
+  llm/          Model client interfaces
   utils/        Shared utilities
   config.py     Shared configuration
 ```
 
-## Main Ideas Behind The Project
-
-- LLM answers should be inspectable, not just readable.
-- Interpretability tools should help a user challenge an answer, not just restate it.
-- Structured analysis makes model behavior easier to evaluate than a plain paragraph response.
-
-## Status
-
-The active version of this project is the React frontend plus Python backend workflow in:
-
-- `frontend/`
-- `backend/`
-- `explain/`
-- `llm/`
-- `utils/`
-
-Older files from earlier experiments may still exist in the repo, but they are not the main app path.
-
-## GitHub Notes
-
-Files and folders that belong in the repo:
-
-- `frontend/`
-- `backend/`
-- `explain/`
-- `llm/`
-- `utils/`
-- `config.py`
-- `README.md`
-- `.gitignore`
-
-Files and folders that should not be committed:
-
-- `.venv/`
-- `backend/.venv/`
-- `frontend/node_modules/`
-- `frontend/dist/`
-- `frontend/.vite-cache/`
-- `.env`
-- `__pycache__/`
-- `db.sqlite3`
