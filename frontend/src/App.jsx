@@ -191,6 +191,45 @@ async function readJsonResponse(response) {
   return payload;
 }
 
+function TitlePage({ status, providerTone, providerLabel, onStart }) {
+  return (
+    <section className="title-fullscreen">
+      <div className="ml-atmosphere" aria-hidden="true">
+        <div className="ml-gradient-flow" />
+        <div className="ml-nebula n1" />
+        <div className="ml-nebula n2" />
+        <div className="ml-corner-slash beam-a" />
+        <div className="ml-vignette" />
+        <div className="ml-stream-band stream-1" />
+        <div className="ml-stream-band stream-2" />
+        <div className="ml-stream-band stream-3" />
+        <div className="ml-stream-band stream-4" />
+        <div className="ml-light-ray ray-a" />
+        <div className="ml-light-ray ray-b" />
+      </div>
+
+      <header className="ml-topbar">
+        <div className="ml-logo">
+          <span className="ml-logo-mark" aria-hidden="true" />
+          <span>BLOEX</span>
+        </div>
+        <button className="ml-enter" type="button" onClick={onStart}>
+          Launch
+        </button>
+      </header>
+
+      <div className="ml-hero-shell">
+        <div className="ml-copy-column">
+          <p className="ml-kicker ml-kicker-slash">BLACK BOX EXPLAINER</p>
+          <p className="ml-subcopy ml-subcopy-slash">
+            Audit generated answers against evidence, surface weak claims, and ship responses with a clear reliability score.
+          </p>
+        </div>
+      </div>
+
+    </section>
+  );
+}
 export default function App() {
   const [view, setView] = useState("home");
   const [question, setQuestion] = useState("");
@@ -299,41 +338,7 @@ export default function App() {
   const providerLabel = status.ok ? "AI Provider Active" : "AI Provider Unavailable";
 
   if (view === "home") {
-    return (
-      <div className="page-shell">
-        <header className="home-hero-shell">
-          <h1>Black Box Explainer</h1>
-          <p>
-            Evaluate AI-generated outputs before trusting them. Upload source material, inspect extracted claims, and see where the answer is
-            strong or weak.
-          </p>
-          <div className="hero-meta-row">
-            <div className="hero-chip">Claim-by-claim inspection</div>
-            <div className="hero-chip">Data-aware reasoning checks</div>
-            <div className="hero-chip">Transparent trust scoring</div>
-          </div>
-        </header>
-
-        <section className="panel-shell home-start-panel">
-          <div className={`status-banner ${providerTone}`}>
-            <strong>{providerLabel}</strong>
-            <div className="metric-caption" style={{ marginTop: "8px" }}>{status.status}</div>
-          </div>
-          <div className="home-start-grid">
-            <div className="home-start-copy">
-              <h2>Start a new evaluation</h2>
-              <p>
-                Keep the current workflow and begin by auditing an AI answer. We will progressively add structured checks and storage while
-                preserving your existing experience.
-              </p>
-            </div>
-            <button className="primary-button" type="button" onClick={openEvaluateView}>
-              Start Evaluation
-            </button>
-          </div>
-        </section>
-      </div>
-    );
+    return <TitlePage status={status} providerTone={providerTone} providerLabel={providerLabel} onStart={openEvaluateView} />;
   }
 
   return (
@@ -444,3 +449,4 @@ export default function App() {
     </div>
   );
 }
+
