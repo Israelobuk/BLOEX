@@ -192,6 +192,7 @@ async function readJsonResponse(response) {
 }
 
 export default function App() {
+  const [view, setView] = useState("home");
   const [question, setQuestion] = useState("");
   const [modelAnswer, setModelAnswer] = useState("");
   const [result, setResult] = useState(null);
@@ -286,8 +287,64 @@ export default function App() {
     }
   }
 
+  function openEvaluateView() {
+    setView("evaluate");
+  }
+
+  function openHomeView() {
+    setView("home");
+  }
+
+  const providerTone = status.ok ? "ok" : "warn";
+  const providerLabel = status.ok ? "AI Provider Active" : "AI Provider Unavailable";
+
+  if (view === "home") {
+    return (
+      <div className="page-shell">
+        <header className="home-hero-shell">
+          <h1>Black Box Explainer</h1>
+          <p>
+            Evaluate AI-generated outputs before trusting them. Upload source material, inspect extracted claims, and see where the answer is
+            strong or weak.
+          </p>
+          <div className="hero-meta-row">
+            <div className="hero-chip">Claim-by-claim inspection</div>
+            <div className="hero-chip">Data-aware reasoning checks</div>
+            <div className="hero-chip">Transparent trust scoring</div>
+          </div>
+        </header>
+
+        <section className="panel-shell home-start-panel">
+          <div className={`status-banner ${providerTone}`}>
+            <strong>{providerLabel}</strong>
+            <div className="metric-caption" style={{ marginTop: "8px" }}>{status.status}</div>
+          </div>
+          <div className="home-start-grid">
+            <div className="home-start-copy">
+              <h2>Start a new evaluation</h2>
+              <p>
+                Keep the current workflow and begin by auditing an AI answer. We will progressively add structured checks and storage while
+                preserving your existing experience.
+              </p>
+            </div>
+            <button className="primary-button" type="button" onClick={openEvaluateView}>
+              Start Evaluation
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="page-shell">
+      <div className="workspace-nav">
+        <button className="ghost-button" type="button" onClick={openHomeView}>
+          Back to Home
+        </button>
+        <div className={`status-pill ${providerTone}`}>{providerLabel}</div>
+      </div>
+
       <header className="hero-shell">
         <h1>Black Box Explainer</h1>
         <p>
