@@ -12,3 +12,5 @@ explain/__pycache__/
 llm/__pycache__/
 utils/__pycache__/
 backend/__pycache__/
+blackbox_site/__pycache__/
+dashboard/__pycache__/

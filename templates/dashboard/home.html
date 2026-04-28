@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Black Box Explainer{% endblock %}
+
+{% block body %}
+<div class="mx-auto flex min-h-screen max-w-[1500px] gap-8 px-6 py-8 lg:px-8">
+  <aside class="hidden w-[320px] shrink-0 lg:block">
+    <div class="sticky top-8 space-y-6">
+      <div class="border border-line bg-panel p-6 shadow-panel">
+        <p class="mb-3 text-xs font-black uppercase tracking-[0.25em] text-accent">Black Box Explainer</p>
+        <h1 class="text-3xl font-black tracking-[-0.04em] text-copy">Django rebuild with a real product shell.</h1>
+        <p class="mt-4 text-sm leading-6 text-subcopy">Ask a question, audit the answer path, and keep a Mongo-backed trail of previous runs.</p>
+      </div>
+
+      <div class="border border-line bg-panel p-6 shadow-panel">
+        <div class="mb-5 flex items-center justify-between">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[0.22em] text-subcopy">Runtime</p>
+            <h2 class="mt-2 text-xl font-bold tracking-[-0.03em]">Backend Settings</h2>
+          </div>
+          <span class="border border-line bg-panelstrong px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-accent">Ollama</span>
+        </div>
+
+        <div class="space-y-5">
+          <div>
+            <p class="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-subcopy">Connection</p>
+            {% if backend_ready %}
+              <div class="border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{{ backend_status }}</div>
+            {% else %}
+              <div class="border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">{{ backend_status }}</div>
+            {% endif %}
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <p class="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-subcopy">Ollama URL</p>
+              <div class="border border-line bg-panelsoft px-4 py-3 text-sm text-copy">{{ runtime.base_url }}</div>
+            </div>
+            <div>
+              <p class="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-subcopy">Model</p>
+              <div class="border border-line bg-panelsoft px-4 py-3 text-sm text-copy">{{ runtime.model }}</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div class="border border-line bg-panelsoft p-4">
+              <p class="text-xs font-bold uppercase tracking-[0.18em] text-subcopy">MongoDB</p>
+              <p class="mt-2 font-semibold text-copy">{% if mongo_enabled %}Enabled{% else %}Optional{% endif %}</p>
+            </div>
+            <div class="border border-line bg-panelsoft p-4">
+              <p class="text-xs font-bold uppercase tracking-[0.18em] text-subcopy">Mode</p>
+              <p class="mt-2 font-semibold text-copy">Django</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="border border-line bg-panel p-6 shadow-panel">
+        <p class="text-xs font-black uppercase tracking-[0.22em] text-subcopy">Recent Runs</p>
+        <div class="mt-4 space-y-3">
+          {% for item in recent_runs %}
+            <div class="border border-line bg-panelsoft p-4">
+              <p class="truncate text-sm font-semibold text-copy">{{ item.question }}</p>
+              <p class="mt-2 text-xs uppercase tracking-[0.16em] text-subcopy">{{ item.model }}</p>
+            </div>
+          {% empty %}
+            <div class="border border-dashed border-line bg-panelsoft p-4 text-sm text-subcopy">No saved runs yet. Add `BBE_MONGODB_URI` to turn on history.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="flex-1 space-y-8">
+    <section class="border border-line bg-panel p-8 shadow-panel">
+      <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div class="max-w-3xl">
+          <p class="text-xs font-black uppercase tracking-[0.25em] text-accent">New Dark UI</p>
+          <h2 class="mt-3 text-5xl font-black tracking-[-0.05em] text-copy">Ask better questions. Audit every answer.</h2>
+          <p class="mt-4 text-base leading-7 text-subcopy">This rebuild swaps Streamlit for Django, adds a full-page dark interface, and keeps the Ollama explainer pipeline at the core.</p>
+        </div>
+        <div class="grid min-w-[280px] grid-cols-2 gap-3">
+          <div class="border border-line bg-panelsoft p-4">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-subcopy">Framework</p>
+            <p class="mt-3 text-lg font-semibold">Django</p>
+          </div>
+          <div class="border border-line bg-panelsoft p-4">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-subcopy">Styling</p>
+            <p class="mt-3 text-lg font-semibold">Tailwind</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {% if messages %}
+      <section class="space-y-3">
+        {% for message in messages %}
+          <div class="border border-line bg-panel px-5 py-4 shadow-panel text-sm {% if message.tags == 'error' %}text-rose-300{% elif message.tags == 'success' %}text-emerald-300{% else %}text-sky-200{% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </section>
+    {% endif %}
+
+    <section class="border border-line bg-panel p-8 shadow-panel">
+      <div class="mb-6 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-subcopy">Explain</p>
+          <h3 class="mt-2 text-2xl font-bold tracking-[-0.04em]">Input</h3>
+        </div>
+        <div class="hidden border border-line bg-panelsoft px-4 py-3 text-sm text-subcopy lg:block">Same Ollama flow, cleaner product shell.</div>
+      </div>
+
+      <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div class="space-y-6">
+            <div>
+              <label class="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-subcopy">Question</label>
+              {{ form.question }}
+            </div>
+            <div>
+              <label class="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-subcopy">Context</label>
+              {{ form.context }}
+            </div>
+          </div>
+
+          <div class="space-y-6">
+            <div class="border border-line bg-panelsoft p-5">
+              <p class="text-xs font-black uppercase tracking-[0.18em] text-subcopy">Connection Settings</p>
+              <div class="mt-4 space-y-4">
+                <div>
+                  <label class="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-subcopy">Ollama URL</label>
+                  {{ form.base_url }}
+                </div>
+                <div>
+                  <label class="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-subcopy">Model</label>
+                  {{ form.model }}
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" class="w-full border border-sky-400 bg-sky-500 px-5 py-4 text-sm font-black uppercase tracking-[0.2em] text-slate-950 transition hover:bg-sky-400">
+              Run Explainer
+            </button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    {% if result %}
+      <section class="space-y-6">
+        <div class="grid gap-4 lg:grid-cols-3">
+          <div class="border border-line bg-panel p-6 shadow-panel">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-subcopy">Confidence</p>
+            <div class="mt-4 inline-flex border border-line px-4 py-3 text-lg font-black uppercase tracking-[0.18em]
+              {% if result.confidence == 'high' %}bg-emerald-950 text-emerald-300{% elif result.confidence == 'medium' %}bg-amber-950 text-amber-300{% else %}bg-rose-950 text-rose-300{% endif %}">
+              {{ result.confidence }}
+            </div>
+            <p class="mt-4 text-sm leading-6 text-subcopy">Support rating based on the evidence the model surfaced from your provided context.</p>
+          </div>
+
+          <div class="border border-line bg-panel p-6 shadow-panel">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-subcopy">Evidence Match</p>
+            <p class="mt-4 text-4xl font-black tracking-[-0.05em] text-copy">
+              {{ result.evidence_claims|length }}
+            </p>
+            <p class="mt-4 text-sm leading-6 text-subcopy">Quoted support items returned by the explainer pipeline.</p>
+          </div>
+
+          <div class="border border-line bg-panel p-6 shadow-panel">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-subcopy">Confidence Reason</p>
+            <p class="mt-4 text-sm leading-7 text-copy">{{ result.confidence_reason }}</p>
+          </div>
+        </div>
+
+        <div class="grid gap-6 xl:grid-cols-2">
+          <section class="border border-line bg-panel p-6 shadow-panel">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-accent">Answer</p>
+            <h3 class="mt-3 text-2xl font-bold tracking-[-0.04em] text-copy">Direct Answer</h3>
+            <p class="mt-4 whitespace-pre-wrap text-base leading-8 text-copy">{{ result.answer }}</p>
+          </section>
+
+          <section class="border border-line bg-panel p-6 shadow-panel">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-accent">Black Box</p>
+            <h3 class="mt-3 text-2xl font-bold tracking-[-0.04em] text-copy">How The Model Got There</h3>
+            <p class="mt-4 whitespace-pre-wrap text-base leading-8 text-copy">{{ result.black_box_explanation }}</p>
+          </section>
+        </div>
+
+        <section class="border border-line bg-panel p-6 shadow-panel">
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-accent">Evidence</p>
+          <h3 class="mt-3 text-2xl font-bold tracking-[-0.04em] text-copy">Support</h3>
+          <div class="mt-6 grid gap-4">
+            {% for claim in result.evidence_claims %}
+              <article class="border border-line bg-panelsoft p-5">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div class="space-y-3">
+                    <h4 class="text-lg font-semibold text-copy">{{ claim.claim|default:"Evidence claim" }}</h4>
+                    <blockquote class="border-l-2 border-sky-400 pl-4 text-base leading-7 text-copy">{{ claim.quote }}</blockquote>
+                    <p class="text-sm leading-6 text-subcopy">{{ claim.support_reason }}</p>
+                  </div>
+                  <span class="inline-flex shrink-0 border border-line px-3 py-2 text-xs font-black uppercase tracking-[0.18em] {% if claim.verified %}bg-emerald-950 text-emerald-300{% else %}bg-rose-950 text-rose-300{% endif %}">
+                    {% if claim.verified %}Verified{% else %}Unverified{% endif %}
+                  </span>
+                </div>
+              </article>
+            {% empty %}
+              <div class="border border-dashed border-line bg-panelsoft p-5 text-sm text-subcopy">No evidence returned for this run.</div>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="border border-line bg-panel p-6 shadow-panel">
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-accent">Context</p>
+          <h3 class="mt-3 text-2xl font-bold tracking-[-0.04em] text-copy">Highlighted Source</h3>
+          <div class="mt-5 whitespace-pre-wrap border border-line bg-panelsoft p-5 text-sm leading-7 text-copy">{{ result.highlighted_context|safe }}</div>
+        </section>
+
+        <div class="grid gap-6 xl:grid-cols-3">
+          <section class="border border-line bg-panel p-6 shadow-panel">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-accent">Assumptions</p>
+            <h3 class="mt-3 text-xl font-bold tracking-[-0.03em] text-copy">What the answer depends on</h3>
+            <ul class="mt-5 space-y-3 text-sm leading-7 text-copy">
+              {% for item in result.assumptions %}
+                <li class="border border-line bg-panelsoft p-4">{{ item }}</li>
+              {% empty %}
+                <li class="border border-dashed border-line bg-panelsoft p-4 text-subcopy">No assumptions returned.</li>
+              {% endfor %}
+            </ul>
+          </section>
+
+          <section class="border border-line bg-panel p-6 shadow-panel">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-accent">Uncertainty</p>
+            <h3 class="mt-3 text-xl font-bold tracking-[-0.03em] text-copy">What could be wrong</h3>
+            <ul class="mt-5 space-y-3 text-sm leading-7 text-copy">
+              {% for item in result.uncertainty %}
+                <li class="border border-line bg-panelsoft p-4">{{ item }}</li>
+              {% empty %}
+                <li class="border border-dashed border-line bg-panelsoft p-4 text-subcopy">No uncertainty notes returned.</li>
+              {% endfor %}
+            </ul>
+          </section>
+
+          <section class="border border-line bg-panel p-6 shadow-panel">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-accent">Follow-ups</p>
+            <h3 class="mt-3 text-xl font-bold tracking-[-0.03em] text-copy">Helpful what-if questions</h3>
+            <ul class="mt-5 space-y-3 text-sm leading-7 text-copy">
+              {% for item in result.followups %}
+                <li class="border border-line bg-panelsoft p-4">{{ item }}</li>
+              {% empty %}
+                <li class="border border-dashed border-line bg-panelsoft p-4 text-subcopy">No follow-ups returned.</li>
+              {% endfor %}
+            </ul>
+          </section>
+        </div>
+      </section>
+    {% endif %}
+  </main>
+</div>
+{% endblock %}
