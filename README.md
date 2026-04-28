@@ -108,42 +108,6 @@ blackbox_explainer/
 - Interpretability tools should help a user challenge an answer, not just restate it.
 - Structured analysis makes model behavior easier to evaluate than a plain paragraph response.
 
-## Status
-
-The active version of this project is the React frontend plus Python backend workflow in:
-
-- `frontend/`
-- `backend/`
-- `explain/`
-- `llm/`
-- `utils/`
-
-Older files from earlier experiments may still exist in the repo, but they are not the main app path.
-
-## GitHub Notes
-
-Files and folders that belong in the repo:
-
-- `frontend/`
-- `backend/`
-- `explain/`
-- `llm/`
-- `utils/`
-- `config.py`
-- `README.md`
-- `.gitignore`
-
-Files and folders that should not be committed:
-
-- `.venv/`
-- `backend/.venv/`
-- `frontend/node_modules/`
-- `frontend/dist/`
-- `frontend/.vite-cache/`
-- `.env`
-- `__pycache__/`
-- `db.sqlite3`
-
 ## UI Refresh (Coming Soon)
 I will be updating the UI to be cleaner, more intuitive, and fully responsive, with a clearer analysis flow and stronger visual hierarchy across desktop and mobile.
 
