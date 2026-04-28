@@ -200,10 +200,6 @@ function TitlePage({ status, providerTone, providerLabel, onStart }) {
         <div className="ml-nebula n2" />
         <div className="ml-corner-slash beam-a" />
         <div className="ml-vignette" />
-        <div className="ml-stream-band stream-1" />
-        <div className="ml-stream-band stream-2" />
-        <div className="ml-stream-band stream-3" />
-        <div className="ml-stream-band stream-4" />
         <div className="ml-light-ray ray-a" />
         <div className="ml-light-ray ray-b" />
       </div>
@@ -342,110 +338,117 @@ export default function App() {
   }
 
   return (
-    <div className="page-shell">
-      <div className="workspace-nav">
-        <button className="ghost-button" type="button" onClick={openHomeView}>
-          Back to Home
-        </button>
-        <div className={`status-pill ${providerTone}`}>{providerLabel}</div>
+    <div className="page-shell audit-page">
+      <div className="audit-homepage-bg" aria-hidden="true">
+        <div className="ml-vignette" />
+        <div className="ml-light-ray ray-a" />
+        <div className="ml-light-ray ray-b" />
       </div>
-
-      <header className="hero-shell">
-        <h1>Black Box Explainer</h1>
-        <p>
-          Paste the original question and the answer another AI gave you. The app explains what that answer likely focused on and where the reasoning may still be weak.
-        </p>
-        <div className="hero-meta-row">
-          <div className="hero-chip">See what the model leaned on</div>
-          <div className="hero-chip">Spot weak reasoning</div>
-          <div className="hero-chip">Ask better follow-ups</div>
-        </div>
-      </header>
-
-      <section className="panel-shell">
-        <div className={`status-banner ${status.ok ? "ok" : "warn"}`}>{status.status}</div>
-      </section>
-
-      <section className="panel-shell">
-        <form onSubmit={handleExplain} className="input-form">
-          <h2>Audit an AI answer</h2>
-
-          <label>
-            <span>Original question</span>
-            <input
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              placeholder="What was the user asking the model to answer?"
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              data-gramm="false"
-              data-gramm_editor="false"
-              data-enable-grammarly="false"
-              data-lt-active="false"
-            />
-          </label>
-
-          <label>
-            <span>LLM answer to analyze</span>
-            <textarea
-              value={modelAnswer}
-              onChange={(event) => setModelAnswer(event.target.value)}
-              placeholder="Paste the exact answer the LLM gave you..."
-              rows={8}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              data-gramm="false"
-              data-gramm_editor="false"
-              data-enable-grammarly="false"
-              data-lt-active="false"
-            />
-          </label>
-
-          {error ? <div className="status-banner warn">{error}</div> : null}
-
-          <button className="primary-button" type="submit" disabled={loading}>
-            {loading ? "Explaining..." : "Explain"}
+      <div className="audit-workspace">
+        <div className="workspace-nav">
+          <button className="audit-home-logo" type="button" onClick={openHomeView} aria-label="Back to home">
+            <span className="audit-home-mark" aria-hidden="true" />
+            <span>BLOEX</span>
           </button>
-        </form>
-      </section>
+          <div className={`status-pill ${providerTone}`}>{providerLabel}</div>
+        </div>
 
-      {result ? (
-        <>
-          <section className="results-header">
-            <h2>Result</h2>
-            <p className="results-subtitle">
-              This workspace is for understanding the answer, what the model likely relied on, and where its reasoning may still be shaky.
-            </p>
-          </section>
+        <section className="panel-shell audit-form-panel">
+          <form onSubmit={handleExplain} className="input-form">
+            <div className="audit-chat-header">
+              <div>
+                <h2>Start an audit</h2>
+                <p>Share the prompt and the answer exactly as it was written.</p>
+              </div>
+              <div className={`backend-chip ${status.ok ? "ok" : "warn"}`}>
+                <span aria-hidden="true" />
+                {status.ok ? "Backend online" : "Backend unavailable"}
+              </div>
+            </div>
+
+            <div className="audit-chat-thread">
+              <div className="audit-input-grid">
+                <label className="audit-field-card">
+                  <span>Original question</span>
+                  <input
+                    value={question}
+                    onChange={(event) => setQuestion(event.target.value)}
+                    placeholder="What was the user asking the model to answer?"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-gramm="false"
+                    data-gramm_editor="false"
+                    data-enable-grammarly="false"
+                    data-lt-active="false"
+                  />
+                </label>
+
+                <label className="audit-field-card large">
+                  <span>LLM answer to analyze</span>
+                  <textarea
+                    value={modelAnswer}
+                    onChange={(event) => setModelAnswer(event.target.value)}
+                    placeholder="Paste the exact answer the LLM gave you..."
+                    rows={7}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-gramm="false"
+                    data-gramm_editor="false"
+                    data-enable-grammarly="false"
+                    data-lt-active="false"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {error ? <div className="status-banner warn">{error}</div> : null}
+
+            <div className="audit-composer-bar">
+              <span>{status.status}</span>
+              <button className="primary-button" type="submit" disabled={loading}>
+                {loading ? "Explaining..." : "Explain"}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        {result ? (
+          <>
+            <section className="results-header">
+              <h2>Result</h2>
+              <p className="results-subtitle">
+                This workspace is for understanding the answer, what the model likely relied on, and where its reasoning may still be shaky.
+              </p>
+            </section>
 
           {result.fallback_mode ? (
-            <section className="panel-shell">
-              <div className="status-banner warn">
-                <strong>Model generation failed, so the app used fallback mode.</strong>
-                <div className="metric-caption" style={{ marginTop: "8px", whiteSpace: "pre-wrap" }}>
-                  {result.fallback_error || "No backend error details were returned."}
+              <section className="fallback-notice">
+                <div className="fallback-icon" aria-hidden="true">!</div>
+                <div>
+                  <strong>Fallback review is showing</strong>
+                  <p>{result.fallback_error || "The model did not return a full generation, so BLOEX used a lightweight local review."}</p>
                 </div>
-              </div>
+              </section>
+            ) : null}
+
+            <section className="panel-shell">
+              <ResultTabs result={result} />
             </section>
-          ) : null}
 
-          <section className="panel-shell">
-            <ResultTabs result={result} />
-          </section>
-
-          <ChatPanel
-            ready={status.ok}
-            selectedModel={activeModel}
-            question={question}
-            modelAnswer={modelAnswer}
-            context=""
-          />
-        </>
-      ) : null}
+            <ChatPanel
+              ready={status.ok}
+              selectedModel={activeModel}
+              question={question}
+              modelAnswer={modelAnswer}
+              context=""
+            />
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }
