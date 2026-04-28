@@ -1811,7 +1811,9 @@ blockquote {
    --------------------------------------- */
 
 .title-fullscreen {
-  --ml-slash-shift-x: 96px;
+  --ml-slash-shift-x: 252px;
+  --ml-slash-shift-y: -3.2%;
+  --ml-slash-angle: -27.9deg;
   position: relative;
   min-height: 100svh;
   overflow: hidden;
@@ -1874,9 +1876,9 @@ blockquote {
   position: absolute;
   width: 220vw;
   height: 2px;
-  top: 46%;
+  top: calc(46% + var(--ml-slash-shift-y));
   left: calc(-70vw + var(--ml-slash-shift-x));
-  transform: rotate(-36deg);
+  transform: rotate(var(--ml-slash-angle));
   transform-origin: center;
   background: rgba(248, 251, 255, 0.94);
   box-shadow: 0 0 10px rgba(182, 196, 255, 0.22);
@@ -1967,7 +1969,7 @@ blockquote {
   border-radius: 999px;
   filter: blur(18px);
   transform: rotate(-36deg);
-  transform-origin: center;
+  transform-origin: left center;
   box-shadow: 0 0 42px rgba(221, 230, 255, 0.18);
 }
 
@@ -2042,7 +2044,7 @@ blockquote {
   width: 28px;
   height: 28px;
   background: #06080f;
-  box-shadow: 0 0 0 1px rgba(209, 223, 255, 0.68), 0 0 18px rgba(138, 164, 231, 0.38);
+  box-shadow: 0 0 0 1px rgba(209, 223, 255, 0.68);
 }
 
 .ml-menu {
@@ -2102,12 +2104,12 @@ blockquote {
 
 .ml-kicker-slash {
   position: absolute;
-  left: calc(428px + var(--ml-slash-shift-x));
-  top: 42%;
+  left: calc(340px + var(--ml-slash-shift-x));
+  top: calc(50% + var(--ml-slash-shift-y));
   width: max-content;
   margin: 0;
   white-space: nowrap;
-  transform: rotate(-36deg);
+  transform: rotate(var(--ml-slash-angle));
   transform-origin: left center;
   color: #06080f;
   font-size: clamp(0.96rem, 1.42vw, 1.28rem);
@@ -2185,8 +2187,8 @@ blockquote {
 
 .ml-subcopy-slash {
   position: absolute;
-  left: calc(318px + var(--ml-slash-shift-x));
-  top: 84%;
+  left: calc(165px + var(--ml-slash-shift-x));
+  top: calc(85% + var(--ml-slash-shift-y));
   display: block;
   margin: 0;
   max-width: none;
@@ -2425,7 +2427,7 @@ blockquote {
 
 @keyframes corner-cross-a {
   0% {
-    transform: rotate(-36deg) translate3d(-130vw, 0, 0);
+    transform: rotate(var(--ml-slash-angle)) translate3d(-130vw, 0, 0);
     opacity: 0;
   }
   8% {
@@ -2435,14 +2437,14 @@ blockquote {
     opacity: 0.95;
   }
   100% {
-    transform: rotate(-36deg) translate3d(130vw, 0, 0);
+    transform: rotate(var(--ml-slash-angle)) translate3d(130vw, 0, 0);
     opacity: 0;
   }
 }
 
 @keyframes corner-cross-b {
   0% {
-    transform: rotate(-36deg) translateX(-170vw);
+    transform: rotate(var(--ml-slash-angle)) translateX(-170vw);
     opacity: 0;
   }
   12% {
@@ -2452,14 +2454,14 @@ blockquote {
     opacity: 0.82;
   }
   100% {
-    transform: rotate(-36deg) translateX(170vw);
+    transform: rotate(var(--ml-slash-angle)) translateX(170vw);
     opacity: 0;
   }
 }
 
 @keyframes corner-cross-c {
   0% {
-    transform: rotate(-36deg) translateX(-186vw);
+    transform: rotate(var(--ml-slash-angle)) translateX(-186vw);
     opacity: 0;
   }
   14% {
@@ -2469,7 +2471,7 @@ blockquote {
     opacity: 0.62;
   }
   100% {
-    transform: rotate(-36deg) translateX(186vw);
+    transform: rotate(var(--ml-slash-angle)) translateX(186vw);
     opacity: 0;
   }
 }
@@ -2596,11 +2598,11 @@ blockquote {
 @keyframes subcopy-slash-in {
   from {
     opacity: 0;
-    transform: rotate(-36deg) translateY(12px);
+    transform: rotate(var(--ml-slash-angle)) translateY(12px);
   }
   to {
     opacity: 1;
-    transform: rotate(-36deg) translateY(0);
+    transform: rotate(var(--ml-slash-angle)) translateY(0);
   }
 }
 
@@ -2616,7 +2618,9 @@ blockquote {
 
 @media (max-width: 1080px) {
   .title-fullscreen {
-    --ml-slash-shift-x: 74px;
+    --ml-slash-shift-x: 132px;
+    --ml-slash-shift-y: -8.2%;
+    --ml-slash-angle: -30.4deg;
   }
 
   .ml-topbar {
@@ -2638,7 +2642,7 @@ blockquote {
   }
 
   .ml-subcopy-slash {
-    left: calc(278px + var(--ml-slash-shift-x));
+    left: calc(304px + var(--ml-slash-shift-x));
     top: 85%;
     width: max-content;
     max-width: none;
@@ -2652,7 +2656,7 @@ blockquote {
   }
 
   .ml-kicker-slash {
-    left: calc(336px + var(--ml-slash-shift-x));
+    left: calc(362px + var(--ml-slash-shift-x));
     top: 44%;
     font-size: clamp(0.82rem, 1.2vw, 1.02rem);
   }
@@ -2671,7 +2675,9 @@ blockquote {
 
 @media (max-width: 720px) {
   .title-fullscreen {
-    --ml-slash-shift-x: 42px;
+    --ml-slash-shift-x: 88px;
+    --ml-slash-shift-y: -6.6%;
+    --ml-slash-angle: -30.4deg;
   }
 
   .ml-topbar {
@@ -2704,7 +2710,7 @@ blockquote {
   }
 
   .ml-kicker-slash {
-    left: calc(188px + var(--ml-slash-shift-x));
+    left: calc(210px + var(--ml-slash-shift-x));
     top: 40%;
     font-size: clamp(0.74rem, 2.2vw, 0.9rem);
   }
@@ -2994,9 +3000,11 @@ blockquote {
 }
 
 .audit-page .audit-field-card textarea {
-  min-height: 178px;
+  min-height: 140px;
   padding: 15px 16px;
-  resize: vertical;
+  resize: none;
+  overflow-y: hidden;
+  max-height: min(56vh, 560px);
 }
 
 .audit-page .audit-field-card input:focus,
@@ -3077,6 +3085,12 @@ blockquote {
     white-space: normal;
   }
 }
+
+/* Final guard: disable manual textarea resize handle in audit answer box */
+.audit-page .audit-field-card.large textarea {
+  resize: none !important;
+}
+
 
 /* Definitive simplified chatbox pass */
 .audit-page .audit-form-panel {
@@ -3548,7 +3562,7 @@ blockquote {
   height: 2px;
   left: -28%;
   top: 52%;
-  transform: rotate(-36deg);
+  transform: rotate(var(--ml-slash-angle));
   background: rgba(248, 251, 255, 0.82);
   box-shadow: 0 0 18px rgba(182, 196, 255, 0.22);
   opacity: 0.62;
@@ -4013,7 +4027,7 @@ blockquote {
   width: 28px;
   height: 28px;
   background: #06080f;
-  box-shadow: 0 0 0 1px rgba(209, 223, 255, 0.68), 0 0 18px rgba(138, 164, 231, 0.38);
+  box-shadow: 0 0 0 1px rgba(209, 223, 255, 0.68);
 }
 
 .audit-page .summary-block,
