@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 const TABS = [
   { key: "answer", label: "Answer" },
   { key: "black_box_explanation", label: "Why The Model Said It" },
@@ -8,7 +8,7 @@ const TABS = [
   { key: "risks", label: "Gaps & Next Questions" },
 ];
 
-function ResultTabs({ result }) {
+function ResultTabs({ result, onReset }) {
   const [activeTab, setActiveTab] = useState("answer");
 
   const content = useMemo(() => {
@@ -76,16 +76,21 @@ function ResultTabs({ result }) {
   return (
     <div className="tabs-shell">
       <div className="tabs-row">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            className={`tab-pill ${activeTab === tab.key ? "active" : ""}`}
-            onClick={() => setActiveTab(tab.key)}
-            type="button"
-          >
-            {tab.label}
-          </button>
-        ))}
+        <div className="tabs-row-pills">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              className={`tab-pill ${activeTab === tab.key ? "active" : ""}`}
+              onClick={() => setActiveTab(tab.key)}
+              type="button"
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <button className="ghost-button new-chat-button" type="button" onClick={onReset}>
+          New chat
+        </button>
       </div>
       <div className="tab-panel">{content}</div>
     </div>
@@ -134,7 +139,7 @@ function ChatPanel({ ready, selectedModel, question, modelAnswer, context }) {
   }
 
   return (
-    <section className="panel-shell">
+    <section className="result-followup-section">
       <div className="section-title-row">
         <h2>Pressure-test this answer</h2>
         {messages.length ? (
@@ -144,7 +149,10 @@ function ChatPanel({ ready, selectedModel, question, modelAnswer, context }) {
         ) : null}
       </div>
       <p className="results-subtitle compact">
-        Ask the explainer to challenge one claim, rewrite a weak sentence, or explain why a source snippet does or does not support the answer.
+        Challenge a claim, tighten a sentence, or ask for stronger support.
+      </p>
+      <p className="results-subtitle compact examples">
+        Try: "Challenge the main claim" or "Rewrite this more carefully."
       </p>
       <div className="chat-stack">
         {messages.map((message, index) => (
@@ -154,24 +162,53 @@ function ChatPanel({ ready, selectedModel, question, modelAnswer, context }) {
         ))}
       </div>
       <form className="chat-form" onSubmit={sendFollowup}>
-        <textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Ask the explainer to check a claim, rewrite a sentence, or suggest a stronger follow-up..."
-          rows={3}
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          data-gramm="false"
-          data-gramm_editor="false"
-          data-enable-grammarly="false"
-          data-lt-active="false"
-        />
-        <button className="primary-button" type="submit" disabled={!ready || loading}>
-          {loading ? "Thinking..." : "Send"}
-        </button>
+        <div className="chat-composer-shell">
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Ask the explainer to check a claim, rewrite a sentence, or suggest a stronger follow-up..."
+            rows={3}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            data-gramm="false"
+            data-gramm_editor="false"
+            data-enable-grammarly="false"
+            data-lt-active="false"
+          />
+          <button className="primary-button composer-send" type="submit" disabled={!ready || loading}>
+            {loading ? "Thinking..." : "Send"}
+          </button>
+        </div>
       </form>
+    </section>
+  );
+}
+
+function ResultPanel({ result, ready, selectedModel, question, modelAnswer, onReset }) {
+  return (
+    <section className="panel-shell audit-form-panel result-combined-panel">
+      <div className="audit-chat-thread result-thread">
+        {result.fallback_mode ? (
+          <section className="fallback-notice in-panel">
+            <div className="fallback-icon" aria-hidden="true">!</div>
+            <div>
+              <strong>Fallback review is showing</strong>
+              <p>{result.fallback_error || "The model did not return a full generation, so BLOEX used a lightweight local review."}</p>
+            </div>
+          </section>
+        ) : null}
+
+        <ResultTabs result={result} onReset={onReset} />
+        <ChatPanel
+          ready={ready}
+          selectedModel={selectedModel}
+          question={question}
+          modelAnswer={modelAnswer}
+          context=""
+        />
+      </div>
     </section>
   );
 }
@@ -191,7 +228,7 @@ async function readJsonResponse(response) {
   return payload;
 }
 
-function TitlePage({ status, providerTone, providerLabel, onStart }) {
+function TitlePage({ onStart }) {
   return (
     <section className="title-fullscreen">
       <div className="ml-atmosphere" aria-hidden="true">
@@ -235,6 +272,7 @@ export default function App() {
   const [activeModel, setActiveModel] = useState("tinyllama:latest");
   const [status, setStatus] = useState({ ok: false, status: "Checking backend..." });
   const [error, setError] = useState("");
+  const modelAnswerRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -253,7 +291,7 @@ export default function App() {
         }
         setStatus({
           ok: Boolean(health.ok),
-          status: health.status || "Backend unavailable.",
+          status: health.ok ? "Black box linked. Ready to explain." : (health.status || "Backend unavailable."),
         });
       } catch (fetchError) {
         if (cancelled) {
@@ -274,6 +312,13 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    const el = modelAnswerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [modelAnswer]);
 
   async function handleExplain(event) {
     event.preventDefault();
@@ -308,7 +353,7 @@ export default function App() {
       }
       setStatus({
         ok: true,
-        status: "Backend responded successfully.",
+        status: "Black box linked. Ready to explain.",
       });
     } catch (runError) {
       const message = runError instanceof Error ? runError.message : "Failed to run the auditor.";
@@ -330,29 +375,32 @@ export default function App() {
     setView("home");
   }
 
-  const providerTone = status.ok ? "ok" : "warn";
-  const providerLabel = status.ok ? "AI Provider Active" : "AI Provider Unavailable";
+  function resetAudit() {
+    setResult(null);
+    setQuestion("");
+    setModelAnswer("");
+    setError("");
+  }
 
   if (view === "home") {
-    return <TitlePage status={status} providerTone={providerTone} providerLabel={providerLabel} onStart={openEvaluateView} />;
+    return <TitlePage onStart={openEvaluateView} />;
   }
 
   return (
-    <div className="page-shell audit-page">
+    <div className="audit-page">
       <div className="audit-homepage-bg" aria-hidden="true">
         <div className="ml-vignette" />
         <div className="ml-light-ray ray-a" />
         <div className="ml-light-ray ray-b" />
       </div>
+      <header className="ml-topbar">
+        <button className="ml-logo ml-logo-button" type="button" onClick={openHomeView} aria-label="Back to home">
+          <span className="ml-logo-mark" aria-hidden="true" />
+          <span>BLOEX</span>
+        </button>
+      </header>
       <div className="audit-workspace">
-        <div className="workspace-nav">
-          <button className="audit-home-logo" type="button" onClick={openHomeView} aria-label="Back to home">
-            <span className="audit-home-mark" aria-hidden="true" />
-            <span>BLOEX</span>
-          </button>
-          <div className={`status-pill ${providerTone}`}>{providerLabel}</div>
-        </div>
-
+        {!result ? (
         <section className="panel-shell audit-form-panel">
           <form onSubmit={handleExplain} className="input-form">
             <div className="audit-chat-header">
@@ -360,20 +408,16 @@ export default function App() {
                 <h2>Start an audit</h2>
                 <p>Share the prompt and the answer exactly as it was written.</p>
               </div>
-              <div className={`backend-chip ${status.ok ? "ok" : "warn"}`}>
-                <span aria-hidden="true" />
-                {status.ok ? "Backend online" : "Backend unavailable"}
-              </div>
             </div>
 
             <div className="audit-chat-thread">
               <div className="audit-input-grid">
                 <label className="audit-field-card">
-                  <span>Original question</span>
+                  <span>Question</span>
                   <input
                     value={question}
                     onChange={(event) => setQuestion(event.target.value)}
-                    placeholder="What was the user asking the model to answer?"
+                    placeholder="Enter the user’s original question."
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="off"
@@ -386,12 +430,14 @@ export default function App() {
                 </label>
 
                 <label className="audit-field-card large">
-                  <span>LLM answer to analyze</span>
+                  <span>Model answer</span>
                   <textarea
+                    ref={modelAnswerRef}
                     value={modelAnswer}
                     onChange={(event) => setModelAnswer(event.target.value)}
-                    placeholder="Paste the exact answer the LLM gave you..."
+                    placeholder="Paste the model’s answer."
                     rows={7}
+                    style={{ overflow: "hidden", resize: "none" }}
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="off"
@@ -415,39 +461,16 @@ export default function App() {
             </div>
           </form>
         </section>
-
-        {result ? (
-          <>
-            <section className="results-header">
-              <h2>Result</h2>
-              <p className="results-subtitle">
-                This workspace is for understanding the answer, what the model likely relied on, and where its reasoning may still be shaky.
-              </p>
-            </section>
-
-          {result.fallback_mode ? (
-              <section className="fallback-notice">
-                <div className="fallback-icon" aria-hidden="true">!</div>
-                <div>
-                  <strong>Fallback review is showing</strong>
-                  <p>{result.fallback_error || "The model did not return a full generation, so BLOEX used a lightweight local review."}</p>
-                </div>
-              </section>
-            ) : null}
-
-            <section className="panel-shell">
-              <ResultTabs result={result} />
-            </section>
-
-            <ChatPanel
-              ready={status.ok}
-              selectedModel={activeModel}
-              question={question}
-              modelAnswer={modelAnswer}
-              context=""
-            />
-          </>
-        ) : null}
+        ) : (
+          <ResultPanel
+            result={result}
+            ready={status.ok}
+            selectedModel={activeModel}
+            question={question}
+            modelAnswer={modelAnswer}
+            onReset={resetAudit}
+          />
+        )}
       </div>
     </div>
   );

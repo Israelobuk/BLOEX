@@ -20,6 +20,69 @@ body {
   min-height: 100vh;
   background: #050505;
   color: #f2f2f2;
+  scroll-behavior: smooth;
+}
+
+html {
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+}
+
+/* BLOEX scrollbar: slim, high-contrast, soft glow on interaction */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(188, 203, 255, 0.72) rgba(7, 12, 33, 0.42);
+}
+
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+*::-webkit-scrollbar-track {
+  background:
+    linear-gradient(180deg, rgba(18, 27, 64, 0.54) 0%, rgba(8, 14, 40, 0.58) 100%);
+  border-left: 1px solid rgba(201, 214, 255, 0.12);
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  background:
+    linear-gradient(180deg, rgba(214, 224, 255, 0.86) 0%, rgba(150, 173, 246, 0.68) 100%);
+  box-shadow:
+    0 0 0 1px rgba(165, 186, 255, 0.28),
+    0 4px 18px rgba(76, 111, 230, 0.24);
+  transition: background 180ms ease, box-shadow 180ms ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(180deg, rgba(232, 238, 255, 0.96) 0%, rgba(175, 194, 255, 0.82) 100%);
+  box-shadow:
+    0 0 0 1px rgba(190, 208, 255, 0.42),
+    0 8px 24px rgba(89, 126, 248, 0.3);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background:
+    linear-gradient(180deg, rgba(245, 248, 255, 0.98) 0%, rgba(196, 210, 255, 0.88) 100%);
+}
+
+*::-webkit-scrollbar-corner {
+  background: rgba(8, 14, 40, 0.58);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body {
+    scroll-behavior: auto;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    transition: none;
+  }
 }
 
 grammarly-desktop-integration,
@@ -2040,6 +2103,20 @@ blockquote {
   text-transform: uppercase;
 }
 
+.ml-logo-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.ml-logo-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
 .ml-logo-mark {
   width: 28px;
   height: 28px;
@@ -2900,6 +2977,10 @@ blockquote {
   box-shadow: inset 0 0 0 1px rgba(194, 210, 255, 0.16);
 }
 
+.audit-page .audit-field-card.large textarea {
+  min-height: 220px;
+}
+
 /* Final simplified chat composer */
 .audit-page .audit-form-panel {
   max-width: 920px;
@@ -2965,7 +3046,8 @@ blockquote {
 .audit-input-grid {
   display: grid;
   gap: 12px;
-  margin-left: 46px;
+  width: min(100%, 1640px);
+  margin: 0 auto;
 }
 
 .audit-field-card,
@@ -3084,6 +3166,80 @@ blockquote {
   .audit-composer-bar span {
     white-space: normal;
   }
+}
+
+/* Final shell lock: the result swap must match the original audit box exactly */
+.audit-page .audit-form-panel,
+.audit-page .result-combined-panel {
+  width: min(100%, 920px);
+  max-width: 920px;
+  min-height: 560px;
+  height: 560px;
+}
+
+.audit-page .result-combined-panel {
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.audit-page .input-form {
+  min-height: 100%;
+}
+
+.audit-page .result-thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 720px) {
+  .audit-page .audit-form-panel,
+  .audit-page .result-combined-panel {
+    height: auto;
+  }
+
+  .audit-page .result-thread {
+    overflow-y: visible;
+  }
+}
+
+/* Final overflow guard: supporting-context content must wrap inside the panel */
+.audit-page .tabs-shell,
+.audit-page .tab-panel,
+.audit-page .evidence-list,
+.audit-page .evidence-card,
+.audit-page .section-block,
+.audit-page .risk-column {
+  min-width: 0;
+}
+
+.audit-page .metric-body,
+.audit-page .metric-caption,
+.audit-page .evidence-title,
+.audit-page blockquote,
+.audit-page .risk-column li,
+.audit-page .risk-column p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.audit-page .risk-column {
+  padding: 22px 24px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(5, 8, 18, 0.42);
+  box-shadow: inset 0 1px 0 rgba(191, 208, 255, 0.08);
+}
+
+.audit-page .risk-column h4 + ul,
+.audit-page .risk-column h4 + p {
+  margin-bottom: 20px;
+}
+
+.audit-page .risk-grid {
+  gap: 28px;
 }
 
 /* Final guard: disable manual textarea resize handle in audit answer box */
@@ -3350,6 +3506,12 @@ blockquote {
   line-height: 1.45;
 }
 
+.fallback-notice.in-panel {
+  max-width: none;
+  margin: 0;
+  border-radius: 12px;
+}
+
 .audit-page .results-header {
   max-width: 780px;
   margin: 28px auto 12px;
@@ -3367,7 +3529,7 @@ blockquote {
 
 .audit-page .results-header + .panel-shell,
 .audit-page .fallback-notice + .panel-shell {
-  max-width: 780px;
+  max-width: 100%;
   margin-inline: auto;
 }
 
@@ -3376,9 +3538,19 @@ blockquote {
 }
 
 .audit-page .tabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
   border-bottom: 1px solid rgba(194, 210, 255, 0.12);
   padding-bottom: 12px;
+}
+
+.audit-page .tabs-row-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 
 .audit-page .tab-pill {
@@ -3396,6 +3568,13 @@ blockquote {
   box-shadow: none;
 }
 
+.audit-page .new-chat-button {
+  flex: 0 0 auto;
+  margin-left: 16px;
+  min-height: 40px;
+  padding: 0 16px;
+}
+
 .audit-page .tab-panel {
   min-height: 0;
 }
@@ -3410,47 +3589,115 @@ blockquote {
   padding: 20px;
 }
 
-.audit-page .panel-shell:has(.chat-form) {
-  max-width: 780px;
-  margin: 20px auto 0;
-  padding: 22px;
+.audit-page .results-header + .panel-shell,
+.audit-page .fallback-notice + .panel-shell {
+  border: 1px solid rgba(191, 208, 255, 0.18);
+  border-radius: 20px;
+  background: rgba(10, 16, 34, 0.74);
+  box-shadow: 0 18px 42px rgba(6, 12, 30, 0.36);
+  backdrop-filter: blur(12px);
 }
 
-.audit-page .panel-shell:has(.chat-form) .section-title-row {
+.audit-page .result-combined-panel {
+  max-width: 920px;
+  margin: 20px auto 0;
+  padding: 0;
+  min-height: 560px;
+}
+
+.audit-page .result-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+}
+
+.audit-page .result-followup-section {
+  margin-top: 0;
+  padding: 20px 0 0;
+  border-top: 1px solid rgba(194, 210, 255, 0.1);
+  background: transparent;
+  margin-top: 0;
+}
+
+.audit-page .result-followup-section .section-title-row {
   align-items: flex-start;
 }
 
-.audit-page .panel-shell:has(.chat-form) h2 {
+.audit-page .result-followup-section h2 {
   font-size: clamp(1.45rem, 2vw, 1.9rem);
 }
 
-.audit-page .panel-shell:has(.chat-form) .results-subtitle {
+.audit-page .result-followup-section .results-subtitle {
   margin: 8px 0 16px;
   max-width: 620px;
 }
 
+.audit-page .result-followup-section .results-subtitle.examples {
+  margin-top: -6px;
+  color: rgba(214, 224, 255, 0.56);
+}
+
+.audit-page .result-combined-panel .section-block,
+.audit-page .result-combined-panel .evidence-card,
+.audit-page .result-combined-panel .risk-column {
+  background: rgba(3, 7, 18, 0.68);
+  box-shadow: none;
+}
+
+.audit-page .result-combined-panel .tabs-shell {
+  padding: 0;
+}
+
+.audit-page .result-combined-panel .tabs-row {
+  padding-bottom: 14px;
+}
+
+.audit-page .result-combined-panel .tab-panel {
+  min-height: 250px;
+}
+
+.audit-page .result-composer-bar {
+  margin-top: auto;
+}
+
 .audit-page .chat-form {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 12px;
+  display: block;
+}
+
+.audit-page .chat-composer-shell {
+  position: relative;
 }
 
 .audit-page .chat-form textarea {
   min-height: 76px;
   border-radius: 14px;
-  padding: 16px;
+  padding: 16px 156px 16px 16px;
 }
 
 .audit-page .chat-form .primary-button {
   min-width: 104px;
 }
 
+.audit-page .chat-composer-shell .composer-send {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+}
+
 @media (max-width: 720px) {
-  .audit-page .chat-form {
-    grid-template-columns: 1fr;
+  .audit-page .chat-form textarea {
+    padding-right: 16px;
+    padding-bottom: 74px;
   }
 
-  .audit-page .panel-shell:has(.chat-form),
+  .audit-page .chat-composer-shell .composer-send {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+
+  .audit-page .result-combined-panel,
   .audit-page .results-header,
   .audit-page .results-header + .panel-shell,
   .audit-page .fallback-notice,
@@ -3734,6 +3981,23 @@ blockquote {
   margin: 26px 0 18px;
 }
 
+/* Final alignment fix: keep audit inputs centered regardless of earlier overrides */
+.audit-page .audit-chat-thread {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.audit-page .audit-input-grid {
+  width: min(100%, 900px);
+  margin: 0 auto !important;
+}
+
+.audit-page .audit-field-card,
+.audit-page .audit-field-card.large {
+  width: 100%;
+}
+
 .audit-page .results-subtitle,
 .audit-page .metric-caption {
   color: rgba(190, 210, 255, 0.76);
@@ -3850,7 +4114,7 @@ blockquote {
   position: relative;
   z-index: 2;
   width: min(1120px, calc(100vw - 40px));
-  padding: 28px 0 56px;
+  padding: 8px 0 56px;
 }
 
 .audit-homepage-bg {
@@ -3862,7 +4126,13 @@ blockquote {
 }
 
 .audit-page .workspace-nav {
-  margin-bottom: clamp(22px, 4vw, 44px);
+  min-height: 72px;
+  margin: 0;
+  padding: 14px clamp(18px, 3vw, 38px) 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  justify-items: start;
 }
 
 .audit-page .ghost-button,
@@ -4072,6 +4342,7 @@ blockquote {
   padding: 0;
   overflow: hidden;
   max-width: 920px;
+  min-height: 560px;
   margin: 0 auto;
   border-color: rgba(194, 210, 255, 0.16);
   background: rgba(5, 9, 22, 0.58);
@@ -4080,6 +4351,9 @@ blockquote {
 
 .audit-page .input-form {
   gap: 0;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .audit-chat-header {
@@ -4267,11 +4541,12 @@ blockquote {
 .audit-composer-bar {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-end;
   gap: 16px;
-  padding: 14px 28px;
-  border-top: 1px solid rgba(194, 210, 255, 0.1);
-  background: rgba(3, 7, 18, 0.52);
+  margin-top: auto;
+  padding: 24px 28px 18px;
+  border-top: 0;
+  background: transparent;
 }
 
 .audit-composer-bar span {

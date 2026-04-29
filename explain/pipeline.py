@@ -1,4 +1,5 @@
 from typing import Any, Dict, List
+import re
 import requests
 
 from explain.prompts import SYSTEM_PROMPT, build_plaintext_fallback_prompt
@@ -8,9 +9,13 @@ from utils.logging import build_trace_log
 from utils.text import chunk_text
 
 
-MAX_CONTEXT_CHARS_FOR_MODEL = 600
-FAST_RETRY_CONTEXT_CHARS = 320
-FAST_RETRY_MAX_TOKENS = 120
+MAX_CONTEXT_CHARS_FOR_MODEL = 420
+FAST_RETRY_CONTEXT_CHARS = 220
+FAST_RETRY_MAX_TOKENS = 90
+LABEL_PATTERN = re.compile(
+    r"\b(ANSWER|BLACK_BOX|QUOTE|ASSUMPTION|UNCERTAINTY|CONFIDENCE_REASON|CONFIDENCE|FOLLOWUP|FOLLOW_UP)\s*:",
+    re.IGNORECASE,
+)
 
 
 def _first_sentence(text: str) -> str:
@@ -119,6 +124,67 @@ def parse_plaintext_fallback(text: str) -> Dict[str, Any]:
         "evidence_claims": [],
     }
     current_key = ""
+    matches = list(LABEL_PATTERN.finditer(text))
+    if matches:
+        label_map = {
+            "answer": "answer",
+            "black_box": "black_box_explanation",
+            "quote": "quote",
+            "assumption": "assumption",
+            "uncertainty": "uncertainty",
+            "confidence": "confidence",
+            "confidence_reason": "confidence_reason",
+            "followup": "followup",
+            "follow_up": "followup",
+        }
+        for index, match in enumerate(matches):
+            raw_key = match.group(1).lower()
+            key = label_map.get(raw_key)
+            if not key:
+                continue
+            start = match.end()
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+            value = " ".join(text[start:end].strip().split())
+            if not value:
+                continue
+            if key == "answer":
+                parsed["answer"] = f"{parsed.get('answer', '')} {value}".strip()
+            elif key == "black_box_explanation":
+                parsed["black_box_explanation"] = f"{parsed.get('black_box_explanation', '')} {value}".strip()
+            elif key == "quote":
+                if not parsed["evidence_claims"]:
+                    parsed["evidence_claims"] = [
+                        {
+                            "claim": "Quoted support from the model output",
+                            "support_reason": "This was the main quote the model chose to justify the answer.",
+                            "quote": value,
+                            "start": None,
+                            "end": None,
+                            "verified": False,
+                        }
+                    ]
+                else:
+                    parsed["evidence_claims"][0]["quote"] = f"{parsed['evidence_claims'][0].get('quote', '')} {value}".strip()
+            elif key == "assumption":
+                parsed["assumptions"].append(value)
+            elif key == "uncertainty":
+                parsed["uncertainty"].append(value)
+            elif key == "confidence":
+                lowered = value.lower()
+                if lowered.startswith("high"):
+                    parsed["confidence"] = "high"
+                elif lowered.startswith("medium"):
+                    parsed["confidence"] = "medium"
+                elif lowered.startswith("low"):
+                    parsed["confidence"] = "low"
+                remainder = value.split(" ", 1)[1].strip(" -:") if " " in value else ""
+                if remainder and not parsed.get("confidence_reason"):
+                    parsed["confidence_reason"] = remainder
+            elif key == "confidence_reason":
+                parsed["confidence_reason"] = value
+            elif key == "followup":
+                parsed["followups"].append(value)
+        return parsed
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
@@ -193,6 +259,31 @@ def parse_plaintext_fallback(text: str) -> Dict[str, Any]:
             parsed["followups"].append(value)
 
     return parsed
+
+
+def _clean_instruction_echo(result: Dict[str, Any]) -> Dict[str, Any]:
+    cleaned = dict(result)
+    marker = re.compile(r"\b(BLACK_BOX|QUOTE|ASSUMPTION|UNCERTAINTY|CONFIDENCE_REASON|CONFIDENCE|FOLLOWUP|FOLLOW_UP|QUESTION)\s*:", re.IGNORECASE)
+    banned_fragments = [
+        "return plain text in exactly this format",
+        "a plain-english audit verdict in 1 to 3 clear sentences",
+        "explain in plain english where the model likely focused",
+        "one short follow-up question, under 14 words",
+        "exact quote copied verbatim from the context",
+    ]
+    for field in ["answer", "black_box_explanation", "confidence_reason"]:
+        value = str(cleaned.get(field, "") or "").strip()
+        if not value:
+            continue
+        # Drop template/instruction leakage from weak-model outputs.
+        hit = marker.search(value)
+        if hit:
+            value = value[: hit.start()].strip()
+        lowered = value.lower()
+        if any(fragment in lowered for fragment in banned_fragments):
+            value = ""
+        cleaned[field] = value
+    return cleaned
 
 
 def result_is_complete(result: Dict[str, Any]) -> bool:
@@ -445,6 +536,7 @@ class ExplainerPipeline:
         temperature: float,
         max_tokens: int,
         critique_pass: bool = False,
+        completion_retry: bool = False,
         model_answer: str = "",
     ) -> Dict[str, Any]:
         steps = ["llm_primary_call", "parse_plaintext", "verify_evidence", "detect_answer_overreach", "adjust_confidence", "build_confidence_breakdown"]
@@ -466,11 +558,13 @@ class ExplainerPipeline:
             model_answer=model_answer,
         )
         result = normalize_result(parse_plaintext_fallback(raw_text))
+        result = _clean_instruction_echo(result)
 
-        if not result_is_complete(result):
+        if completion_retry and not result_is_complete(result):
             steps.append("llm_completion_retry_call")
             retry_text = self._run_completion_retry(question, context_for_model, raw_text, missing_fields(result), model_answer=model_answer)
             retry_result = normalize_result(parse_plaintext_fallback(retry_text))
+            retry_result = _clean_instruction_echo(retry_result)
             raw_text = raw_text + "\n" + retry_text
             result = merge_results(result, retry_result)
 

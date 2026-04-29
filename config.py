@@ -16,7 +16,7 @@ def _load_dotenv_file() -> None:
         key, value = line.split('=', 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        if key and key not in os.environ:
+        if key:
             os.environ[key] = value
 
 
@@ -32,12 +32,14 @@ class AppConfig:
     max_tokens: int = 640
     timeout_seconds: int = 60
     critique_pass: bool = False
+    completion_retry: bool = False
 
 
 DEFAULT_CONFIG = AppConfig(
     model='tinyllama:latest',
     base_url='http://127.0.0.1:11434',
     max_tokens=120,
+    completion_retry=False,
 )
 
 
@@ -70,4 +72,5 @@ def load_from_env(secrets: Optional[Mapping[str, Any]] = None) -> AppConfig:
         max_tokens=int(_get_setting('BBE_MAX_TOKENS', str(cfg.max_tokens), secrets)),
         timeout_seconds=int(_get_setting('BBE_TIMEOUT_SECONDS', str(cfg.timeout_seconds), secrets)),
         critique_pass=_get_bool('BBE_CRITIQUE_PASS', cfg.critique_pass, secrets),
+        completion_retry=_get_bool('BBE_COMPLETION_RETRY', cfg.completion_retry, secrets),
     )
