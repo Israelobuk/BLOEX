@@ -2181,8 +2181,8 @@ blockquote {
 
 .ml-kicker-slash {
   position: absolute;
-  left: calc(340px + var(--ml-slash-shift-x));
-  top: calc(50% + var(--ml-slash-shift-y));
+  left: calc(290px + var(--ml-slash-shift-x));
+  top: calc(56% + var(--ml-slash-shift-y));
   width: max-content;
   margin: 0;
   white-space: nowrap;
@@ -2264,8 +2264,8 @@ blockquote {
 
 .ml-subcopy-slash {
   position: absolute;
-  left: calc(165px + var(--ml-slash-shift-x));
-  top: calc(85% + var(--ml-slash-shift-y));
+  left: calc(140px + var(--ml-slash-shift-x));
+  top: calc(90% + var(--ml-slash-shift-y));
   display: block;
   margin: 0;
   max-width: none;
