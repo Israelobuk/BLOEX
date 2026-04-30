@@ -1,5 +1,7 @@
 # BLOEX
 
+Live site: https://bloex.vercel.app
+
 BLOEX is a web app for auditing whether an answer actually holds up.
 
 Paste the original question, the answer you want to inspect, and any supporting context. BLOEX turns that into a readable review of what the answer gets right, what it assumes, what the evidence actually supports, and where the response is still weak.
