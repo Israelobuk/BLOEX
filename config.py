@@ -32,14 +32,14 @@ class AppConfig:
     max_tokens: int = 640
     timeout_seconds: int = 60
     critique_pass: bool = False
-    completion_retry: bool = False
+    completion_retry: bool = True
 
 
 DEFAULT_CONFIG = AppConfig(
-    model='tinyllama:latest',
+    model='phi3:mini',
     base_url='http://127.0.0.1:11434',
-    max_tokens=120,
-    completion_retry=False,
+    max_tokens=480,
+    completion_retry=True,
 )
 
 

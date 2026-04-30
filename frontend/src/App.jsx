@@ -1,12 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8001").replace(/\/$/, "");
 const TABS = [
   { key: "answer", label: "Answer" },
   { key: "black_box_explanation", label: "Why The Model Said It" },
   { key: "evidence", label: "Supporting Context" },
-  { key: "risks", label: "Gaps & Next Questions" },
+  { key: "risks", label: "Gaps & Risks" },
 ];
+
 
 function ResultTabs({ result, onReset }) {
   const [activeTab, setActiveTab] = useState("answer");
@@ -63,9 +64,6 @@ function ResultTabs({ result, onReset }) {
           <ul>{(result.uncertainty || []).map((item, index) => <li key={`u-${index}`}>{item}</li>)}</ul>
         </div>
         <div className="risk-column">
-          <h4>Questions to ask next</h4>
-          <ul>{(result.followups || []).map((item, index) => <li key={`f-${index}`}>{item}</li>)}</ul>
-
           <h4>Why the app scored it this way</h4>
           <p className="metric-body">{result.confidence_reason || "No confidence explanation returned."}</p>
         </div>
@@ -96,97 +94,7 @@ function ResultTabs({ result, onReset }) {
     </div>
   );
 }
-
-function ChatPanel({ ready, selectedModel, question, modelAnswer, context }) {
-  const [messages, setMessages] = useState([]);
-  const [draft, setDraft] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function sendFollowup(event) {
-    event.preventDefault();
-    const cleaned = draft.trim();
-    if (!cleaned || !ready) return;
-
-    setLoading(true);
-    setMessages((current) => [...current, { role: "user", content: cleaned }]);
-    setDraft("");
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/followup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question,
-          model_answer: modelAnswer,
-          context,
-          followup: cleaned,
-          model: selectedModel,
-        }),
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.detail || "Follow-up request failed.");
-      }
-      setMessages((current) => [...current, { role: "assistant", content: payload.reply }]);
-    } catch (error) {
-      setMessages((current) => [
-        ...current,
-        { role: "assistant", content: error instanceof Error ? error.message : "Follow-up request failed." },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <section className="result-followup-section">
-      <div className="section-title-row">
-        <h2>Pressure-test this answer</h2>
-        {messages.length ? (
-          <button className="ghost-button" type="button" onClick={() => setMessages([])}>
-            Clear chat
-          </button>
-        ) : null}
-      </div>
-      <p className="results-subtitle compact">
-        Challenge a claim, tighten a sentence, or ask for stronger support.
-      </p>
-      <p className="results-subtitle compact examples">
-        Try: "Challenge the main claim" or "Rewrite this more carefully."
-      </p>
-      <div className="chat-stack">
-        {messages.map((message, index) => (
-          <div key={`${message.role}-${index}`} className={`chat-bubble ${message.role}`}>
-            {message.content}
-          </div>
-        ))}
-      </div>
-      <form className="chat-form" onSubmit={sendFollowup}>
-        <div className="chat-composer-shell">
-          <textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Ask the explainer to check a claim, rewrite a sentence, or suggest a stronger follow-up..."
-            rows={3}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            data-gramm="false"
-            data-gramm_editor="false"
-            data-enable-grammarly="false"
-            data-lt-active="false"
-          />
-          <button className="primary-button composer-send" type="submit" disabled={!ready || loading}>
-            {loading ? "Thinking..." : "Send"}
-          </button>
-        </div>
-      </form>
-    </section>
-  );
-}
-
-function ResultPanel({ result, ready, selectedModel, question, modelAnswer, onReset }) {
+function ResultPanel({ result, onReset }) {
   return (
     <section className="panel-shell audit-form-panel result-combined-panel">
       <div className="audit-chat-thread result-thread">
@@ -201,13 +109,6 @@ function ResultPanel({ result, ready, selectedModel, question, modelAnswer, onRe
         ) : null}
 
         <ResultTabs result={result} onReset={onReset} />
-        <ChatPanel
-          ready={ready}
-          selectedModel={selectedModel}
-          question={question}
-          modelAnswer={modelAnswer}
-          context=""
-        />
       </div>
     </section>
   );
@@ -267,13 +168,12 @@ export default function App() {
   const [view, setView] = useState("home");
   const [question, setQuestion] = useState("");
   const [modelAnswer, setModelAnswer] = useState("");
+  const [context, setContext] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [activeModel, setActiveModel] = useState("tinyllama:latest");
+  const [activeModel, setActiveModel] = useState("phi3:mini");
   const [status, setStatus] = useState({ ok: false, status: "Checking backend..." });
   const [error, setError] = useState("");
-  const modelAnswerRef = useRef(null);
-
   useEffect(() => {
     let cancelled = false;
 
@@ -313,23 +213,16 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    const el = modelAnswerRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [modelAnswer]);
-
   async function handleExplain(event) {
     event.preventDefault();
     setError("");
 
-    if (!question.trim()) {
-      setError("The original question is required.");
-      return;
-    }
     if (!modelAnswer.trim()) {
       setError("The model answer is required.");
+      return;
+    }
+    if (!question.trim()) {
+      setError("Fix the missing field and run the audit again.");
       return;
     }
     setLoading(true);
@@ -340,6 +233,7 @@ export default function App() {
         body: JSON.stringify({
           question: question.trim(),
           model_answer: modelAnswer,
+          context,
           model: activeModel,
         }),
       });
@@ -379,6 +273,7 @@ export default function App() {
     setResult(null);
     setQuestion("");
     setModelAnswer("");
+    setContext("");
     setError("");
   }
 
@@ -432,7 +327,6 @@ export default function App() {
                 <label className="audit-field-card large">
                   <span>Model answer</span>
                   <textarea
-                    ref={modelAnswerRef}
                     value={modelAnswer}
                     onChange={(event) => setModelAnswer(event.target.value)}
                     placeholder="Paste the model’s answer."
@@ -451,10 +345,10 @@ export default function App() {
               </div>
             </div>
 
-            {error ? <div className="status-banner warn">{error}</div> : null}
-
             <div className="audit-composer-bar">
-              <span>{status.status}</span>
+              <div className="audit-composer-status">
+                <span>{error || status.status}</span>
+              </div>
               <button className="primary-button" type="submit" disabled={loading}>
                 {loading ? "Explaining..." : "Explain"}
               </button>
@@ -464,10 +358,6 @@ export default function App() {
         ) : (
           <ResultPanel
             result={result}
-            ready={status.ok}
-            selectedModel={activeModel}
-            question={question}
-            modelAnswer={modelAnswer}
             onReset={resetAudit}
           />
         )}

@@ -16,3 +16,6 @@ dashboard
 static
 templates
 db.sqlite3
+data/history.db
+data/*.db
+data/*.db-journal

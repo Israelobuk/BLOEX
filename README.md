@@ -1,113 +1,151 @@
-﻿# Black Box Explainer
+# BLOEX
 
-Black Box Explainer is an LLM answer analysis tool built to help users inspect, question, and better understand AI-generated responses.
+BLOEX is a web app for auditing whether an answer actually holds up.
 
-Instead of treating an LLM answer as something to blindly trust, the project is designed to break the response down into a more interpretable format:
+Paste the original question, the answer you want to inspect, and any supporting context. BLOEX turns that into a readable review of what the answer gets right, what it assumes, what the evidence actually supports, and where the response is still weak.
 
-- what the answer is saying
-- why the model likely landed on that answer
-- what assumptions the answer depends on
-- where the reasoning may still be weak
-- what follow-up questions a user should ask next
+The product is built to make black-box answers easier to inspect without forcing users to dig through prompt chains, hidden assumptions, or raw model output.
 
-The goal is to make black-box model behavior easier to evaluate, especially when a user wants to understand whether an answer sounds plausible, overconfident, incomplete, or weakly supported.
+## What BLOEX Does
 
-## What The Project Does
+- reviews a pasted answer against the user's original question
+- checks whether the answer is supported by the context you provide
+- separates the result into verdict, reasoning, support, and risk
+- runs fully on your machine with a local model through Ollama
+- keeps a lightweight predictive engine in the same repo for structured analysis workflows
 
-The app takes:
+## Product Flow
 
-- the original user question
-- the LLM answer being reviewed
+1. Enter the original question.
+2. Paste the answer you want to inspect.
+3. Add optional context, notes, quotes, or source material.
+4. Run the audit.
+5. Review the result across:
+   - `Answer`
+   - `Why The Model Said It`
+   - `Supporting Context`
+   - `Gaps & Risks`
 
-and returns a structured analysis that helps the user inspect the response rather than simply accept it at face value.
+## What Makes It Different
 
-The output is organized into a few core views:
+Most answer-review tools stop at a single generated verdict.
 
-- `Answer`: a direct audit-style read of the response
-- `Why The Model Said It`: a plain-language explanation of what the model likely focused on
-- `Supporting Context`: extracted support signals and evidence claims when available
-- `Gaps & Next Questions`: assumptions, uncertainty, and suggested follow-up questions
+BLOEX is designed to do more than that. It separates the result into clear parts, checks the answer against the context you provide, and routes the backend through a more controlled workflow before anything is shown in the UI.
 
-## Why It Matters
+That keeps the front end simple while making the underlying audit process more deliberate and more resilient.
 
-Large language models can produce answers that sound polished even when the reasoning is incomplete, weakly supported, or overly confident.
+## Tech Stack
 
-This project explores a practical interpretability workflow for AI outputs by helping users:
+### Frontend
 
-- inspect how an answer was formed
-- identify weak reasoning or unsupported claims
-- see what the answer appears to rely on
-- ask sharper follow-up questions
+- React 18
+- Vite 5
+- Plain CSS
 
-## Current Scope
+### Backend
 
-This is a local-first project designed around a local Ollama backend.
+- FastAPI
+- Uvicorn
+- Pydantic-style FastAPI models
+- Python Dotenv
+- Requests
 
-The full workflow works best when run on your own machine with a local model. Public deployment is possible for the frontend, but hosted Ollama inference on free-tier infrastructure is memory-constrained, so the most reliable version of the project is the local setup described below.
+### Model Runtime
 
-## Local Setup
+- Ollama
 
-### 1. Start Ollama
+### Orchestration and Analysis
 
-If Ollama is not already running:
+- LangGraph for stateful audit orchestration
+- Pandas for structured signal analysis
+- RapidFuzz for fuzzy matching
+- aiohttp for concurrent model calls in the predictive engine
 
-```powershell
-ollama serve
-```
+### Persistence
 
-Pull the model once if needed:
+- SQLite for local history and cached analysis state
 
-```powershell
-ollama pull tinyllama:latest
-```
+### Testing
 
-### 2. Run the backend
+- Pytest
+- HTTPX
 
-```powershell
-cd backend
-.\.venv\Scripts\activate
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
-```
+## How It Works
 
-### 3. Run the frontend
+### Explain Flow
 
-```powershell
-cd frontend
-npm run dev
-```
+The main audit path lives under `explain/` and is served through `/api/explain`.
 
-### 4. Open the app
+LangGraph controls the workflow around Ollama:
+
+1. `generate_primary`
+2. `evaluate_quality`
+3. `repair_output`
+4. `finalize`
+
+Ollama handles inference. LangGraph handles state, routing, retries, and completion logic.
+
+### Predictive Engine
+
+The repo also includes a lightweight structured analysis engine under `api/` and `core/`.
+
+It supports:
+
+- recursive branch analysis
+- SQLite-backed history
+- fuzzy matching support
+- model-assisted branch explanations
+
+Available endpoints:
+
+- `POST /api/analyze`
+- `GET /api/analysis/{analysis_id}`
+- `GET /api/history`
+- `GET /api/health`
+
+## Product Experience
+
+BLOEX is meant to feel simple from the user side:
+
+- drop in a question, an answer, and optional context
+- get back a readable audit instead of a blob of model confidence
+- move between verdict, reasoning, support, and risk without leaving the page
+- keep the product focused on answer quality, not prompt tinkering
+
+The app is built to present a clean interface on top of a more careful backend workflow.
+
+## Deployment
+
+This repo is structured as a deployable web product:
+
+- a React frontend for the main user experience
+- a FastAPI backend for audit requests and analysis routes
+- a model runtime through Ollama
+- a stateful orchestration layer through LangGraph
+- lightweight persistence through SQLite
+
+Docker and Render configuration are already included in the repo for deployment workflows.
+
+## Repository Layout
 
 ```text
-http://127.0.0.1:5173
+BLOEX/
+  frontend/     Web interface
+  backend/      FastAPI application entrypoint
+  explain/      Audit prompts, parsing, orchestration, output shaping
+  api/          Predictive analysis routes and schemas
+  core/         Analysis logic, persistence, memory, model helpers
+  data/         Local runtime data
+  llm/          Model client layer
+  tests/        Test coverage
+  utils/        Shared helpers
 ```
 
-## Example Workflow
+## Summary
 
-1. Paste the original question that was asked to the LLM.
-2. Paste the exact LLM answer you want to inspect.
-3. Run the explainer.
-4. Review the result across the explanation tabs.
-5. Use the follow-up section to pressure-test weak points in the response.
+- Ollama provides the inference layer.
+- LangGraph manages the stateful audit workflow around that inference.
+- SQLite keeps the application state lightweight.
+- The predictive engine remains part of the repo, but the main product surface is the audit experience.
 
-## Project Structure
-
-```text
-blackbox_explainer/
-  backend/      API layer
-  frontend/     User interface
-  explain/      Core explanation and analysis pipeline
-  llm/          LLM client interfaces
-  utils/        Shared utilities
-  config.py     Shared configuration
-```
-
-## Main Ideas Behind The Project
-
-- LLM answers should be inspectable, not just readable.
-- Interpretability tools should help a user challenge an answer, not just restate it.
-- Structured analysis makes model behavior easier to evaluate than a plain paragraph response.
-
-## UI Refresh (Coming Soon)
-I will be updating the UI to be cleaner, more intuitive, and fully responsive, with a clearer analysis flow and stronger visual hierarchy across desktop and mobile.
 
