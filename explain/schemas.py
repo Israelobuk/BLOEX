@@ -1,5 +1,4 @@
 from typing import Any, Dict, List
-import re
 
 
 ALLOWED_CONFIDENCE = {"low", "medium", "high"}
@@ -18,7 +17,6 @@ def default_result() -> Dict[str, Any]:
         "uncertainty": [],
         "confidence": "",
         "confidence_reason": "",
-        "followups": [],
     }
 
 
@@ -33,25 +31,6 @@ def to_string_list(value: Any) -> List[str]:
     return [text]
 
 
-def normalize_followups(value: Any) -> List[str]:
-    items = to_string_list(value)
-    normalized: List[str] = []
-
-    for item in items:
-        clean = " ".join(item.split())
-        match = re.search(r"([^?]*\?)", clean)
-        question = match.group(1).strip() if match else ""
-
-        if not question:
-            continue
-        if len(question) > 180:
-            continue
-
-        normalized.append(question)
-
-    return normalized
-
-
 def normalize_result(raw: Dict[str, Any]) -> Dict[str, Any]:
     out = default_result()
 
@@ -59,7 +38,6 @@ def normalize_result(raw: Dict[str, Any]) -> Dict[str, Any]:
     out["black_box_explanation"] = str(raw.get("black_box_explanation", "")).strip()
     out["assumptions"] = to_string_list(raw.get("assumptions"))[:3]
     out["uncertainty"] = to_string_list(raw.get("uncertainty"))[:3]
-    out["followups"] = normalize_followups(raw.get("followups"))[:3]
 
     confidence = str(raw.get("confidence", "")).strip().lower()
     out["confidence"] = confidence if confidence in ALLOWED_CONFIDENCE else ""

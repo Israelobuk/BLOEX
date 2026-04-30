@@ -3,10 +3,15 @@ backend/.venv/
 __pycache__/
 *.pyc
 .env
+.cache/
+.pytest_cache/
 .streamlit/secrets.toml
 frontend/node_modules/
 frontend/dist/
 frontend/.vite-cache/
+data/history.db
+data/*.db
+data/*.db-journal
 backend/__pycache__/
 explain/__pycache__/
 llm/__pycache__/

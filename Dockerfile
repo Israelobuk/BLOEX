@@ -18,6 +18,9 @@ COPY backend/requirements.txt /tmp/backend-requirements.txt
 RUN pip install -r /tmp/backend-requirements.txt
 
 COPY backend /app/backend
+COPY api /app/api
+COPY core /app/core
+COPY data /app/data
 COPY explain /app/explain
 COPY llm /app/llm
 COPY utils /app/utils

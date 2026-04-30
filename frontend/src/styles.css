@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700&family=Sora:wght@500;600;700;800&display=swap");
+﻿@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700&family=Sora:wght@500;600;700;800&display=swap");
 
 :root {
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
@@ -3059,6 +3059,7 @@ blockquote {
   background: transparent;
 }
 
+
 .audit-page .audit-field-card span {
   color: rgba(190, 204, 244, 0.76);
   font: 700 0.78rem/1 "Rajdhani", "Sora", sans-serif;
@@ -3339,6 +3340,7 @@ blockquote {
   resize: vertical;
 }
 
+
 .audit-page .audit-field-card input:focus,
 .audit-page .audit-field-card textarea:focus {
   border-color: rgba(222, 231, 255, 0.42);
@@ -3468,7 +3470,7 @@ blockquote {
   }
 }
 
-/* Results and follow-up refinement */
+/* Results and fallback notices */
 .fallback-notice {
   max-width: 780px;
   margin: 18px auto;
@@ -3540,7 +3542,8 @@ blockquote {
 .audit-page .tabs-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
   gap: 8px;
   border-bottom: 1px solid rgba(194, 210, 255, 0.12);
   padding-bottom: 12px;
@@ -3548,17 +3551,22 @@ blockquote {
 
 .audit-page .tabs-row-pills {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .audit-page .tab-pill {
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 40px;
   padding: 0 14px;
   border-radius: 999px;
   font-size: 0.78rem;
   background: rgba(255, 255, 255, 0.035);
+  justify-content: center;
+  text-align: center;
 }
 
 .audit-page .tab-pill.active {
@@ -3572,7 +3580,10 @@ blockquote {
   flex: 0 0 auto;
   margin-left: 16px;
   min-height: 40px;
+  width: 150px;
   padding: 0 16px;
+  justify-content: center;
+  text-align: center;
 }
 
 .audit-page .tab-panel {
@@ -3610,32 +3621,6 @@ blockquote {
   flex-direction: column;
   gap: 18px;
   min-height: 0;
-}
-
-.audit-page .result-followup-section {
-  margin-top: 0;
-  padding: 20px 0 0;
-  border-top: 1px solid rgba(194, 210, 255, 0.1);
-  background: transparent;
-  margin-top: 0;
-}
-
-.audit-page .result-followup-section .section-title-row {
-  align-items: flex-start;
-}
-
-.audit-page .result-followup-section h2 {
-  font-size: clamp(1.45rem, 2vw, 1.9rem);
-}
-
-.audit-page .result-followup-section .results-subtitle {
-  margin: 8px 0 16px;
-  max-width: 620px;
-}
-
-.audit-page .result-followup-section .results-subtitle.examples {
-  margin-top: -6px;
-  color: rgba(214, 224, 255, 0.56);
 }
 
 .audit-page .result-combined-panel .section-block,
@@ -4595,4 +4580,69 @@ blockquote {
   .audit-composer-bar span {
     white-space: normal;
   }
+}
+
+/* Fixed model-answer input: keep the box size stable and scroll long text inside it. */
+.audit-page .audit-field-card.large textarea {
+  height: 178px;
+  min-height: 178px;
+  max-height: 178px;
+  resize: none;
+  overflow-y: auto;
+}
+
+/* Keep the model answer fixed and scrollable. */
+.audit-page .input-form .audit-field-card.large textarea {
+  height: 178px !important;
+  min-height: 178px !important;
+  max-height: 178px !important;
+  resize: none !important;
+  overflow-y: auto !important;
+}
+
+/* Cleaned dataset output for pasted data mode. */
+.cleaned-dataset-shell {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.cleaned-dataset-summary {
+  color: rgba(239, 244, 255, 0.94);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.cleaned-table-scroll {
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid rgba(191, 208, 255, 0.18);
+  background: rgba(3, 7, 18, 0.62);
+}
+
+.cleaned-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 620px;
+  color: rgba(239, 244, 255, 0.92);
+  font-size: 0.86rem;
+}
+
+.cleaned-table th,
+.cleaned-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(191, 208, 255, 0.12);
+  text-align: left;
+  vertical-align: top;
+}
+
+.cleaned-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(12, 18, 38, 0.96);
+  color: rgba(190, 210, 255, 0.82);
+  font: 700 0.75rem/1 "Rajdhani", "Sora", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }

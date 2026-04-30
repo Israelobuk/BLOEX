@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from copy import deepcopy
+import asyncio
 import hashlib
 import json
 import os
@@ -9,6 +10,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from uuid import uuid4
 from typing import Literal
 
 from dotenv import load_dotenv
@@ -22,25 +24,19 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import load_from_env
+from api.routes import router as predictive_router, predictive_health
+from core.context_parser import parse_structured_context
+from core.logic_engine import build_analysis_tree
+from core.ollama_client import AsyncOllamaClient
+from core.persistence import AuditStore, DEFAULT_DB_PATH
+from core.signal_enrichment import enrich_explainer_result_with_signals
+from core.workflow import run_analysis_workflow
 from explain.pipeline import ExplainerPipeline, build_fallback_result
 from llm import create_client
 
 
 load_dotenv(PROJECT_ROOT / ".env")
 load_dotenv(Path(__file__).resolve().parent / ".env")
-
-FOLLOWUP_SYSTEM_PROMPT = """
-You are a helpful assistant who explains things clearly to real users.
-Rules:
-1) Start with a direct answer first.
-2) Use plain, natural language instead of formal or academic wording.
-3) Explain things like you are talking to a smart user, not writing a paper.
-4) If you use a technical term, explain it simply.
-5) Explain what the model seems to be focusing on, missing, overstating, or understating when relevant.
-6) Use examples only when they make the answer easier to understand.
-7) If the follow-up is unrelated to the context, answer directly.
-""".strip()
-
 MODEL_OPTIONS = [
     {"value": "tinyllama:latest", "label": "TinyLlama", "description": "Smallest deployment-safe option. Best for getting the hosted explainer to run reliably."},
     {"value": "phi3:mini", "label": "Phi-3 Mini", "description": "Faster and lighter than Llama 3.2, with better quality than TinyLlama when memory allows."},
@@ -53,7 +49,7 @@ CACHE_DIR = PROJECT_ROOT / ".cache"
 CACHE_FILE = CACHE_DIR / "explain_cache.json"
 EXPLAIN_CACHE_MAX_ITEMS = int(os.getenv("BBE_EXPLAIN_CACHE_MAX_ITEMS", "400"))
 EXPLAIN_CACHE_TTL_SECONDS = int(os.getenv("BBE_EXPLAIN_CACHE_TTL_SECONDS", str(60 * 60 * 24 * 14)))
-CACHE_SCHEMA_VERSION = "v2"
+CACHE_SCHEMA_VERSION = "v4"
 
 
 class ExplainCache:
@@ -158,10 +154,62 @@ EXPLAIN_CACHE = ExplainCache(
 )
 
 
+def _pandas_signal_hint(context: str) -> str:
+    structured = parse_structured_context(context)
+    if not structured:
+        return ""
+    try:
+        root = build_analysis_tree(
+            structured["data"],
+            user_goal="Summarize structured evidence signals for answer auditing.",
+            focus_columns=structured.get("focus_columns") or [],
+            max_depth=1,
+            min_rows=2,
+        )
+    except Exception:
+        return ""
+
+    summary = root.get("statistical_summary", {})
+    parts = [f"rows={root.get('row_count', 0)}"]
+    means = summary.get("numeric_means", {})
+    missing = summary.get("missing_percentage", {})
+    outliers = summary.get("outlier_signals", {})
+    correlations = summary.get("correlations", {})
+    if means:
+        parts.append("means=" + ", ".join(f"{k}:{v}" for k, v in list(means.items())[:4]))
+    if missing:
+        parts.append("missing=" + ", ".join(f"{k}:{v}%" for k, v in list(missing.items())[:4]))
+    if outliers:
+        parts.append("outliers=" + ", ".join(list(outliers.keys())[:4]))
+    if correlations:
+        parts.append("correlations=" + ", ".join(f"{k}:{v}" for k, v in list(correlations.items())[:4]))
+    trigger = str(root.get("trigger_reason") or "").strip()
+    if trigger:
+        parts.append(f"trigger={trigger}")
+    return " | ".join(parts)
+
+
 def _parse_bool(value: str | None, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _parse_int(value: str | None, default: int) -> int:
+    if value is None:
+        return default
+    try:
+        return int(value.strip())
+    except Exception:
+        return default
+
+
+def _should_retry_stronger_model() -> bool:
+    return _parse_bool(os.getenv("BBE_STRONGER_MODEL_RETRY"), True)
+
+
+def _should_enable_signal_enrichment() -> bool:
+    return _parse_bool(os.getenv("BBE_SIGNAL_ENRICHMENT"), False)
 
 
 def _cors_origins() -> list[str]:
@@ -180,14 +228,6 @@ class ExplainRequest(BaseModel):
     question: str = Field(min_length=1)
     model_answer: str = ""
     context: str = ""
-    model: str | None = None
-
-
-class FollowupRequest(BaseModel):
-    question: str = Field(min_length=1)
-    model_answer: str = ""
-    context: str = ""
-    followup: str = Field(min_length=1)
     model: str | None = None
 
 
@@ -265,18 +305,31 @@ def _next_stronger_model(current: str, installed: list[str]) -> str | None:
 def _result_is_weak(result: dict) -> bool:
     answer = str(result.get("answer", "") or "").strip().lower()
     black_box = str(result.get("black_box_explanation", "") or "").strip().lower()
+    confidence_reason = str(result.get("confidence_reason", "") or "").strip().lower()
     evidence = result.get("evidence_claims") or []
+    assumptions = [str(item).strip().lower() for item in (result.get("assumptions") or [])]
     uncertainty = result.get("uncertainty") or []
+    uncertainty_lines = [str(item).strip().lower() for item in uncertainty]
     fallback_mode = bool(result.get("fallback_mode"))
     weak_phrases = [
         "directionally useful, but it still needs review",
         "full reasoning trace was incomplete",
         "fallback review",
+        "a plain-english audit verdict",
+        "a direct answer to the question",
+        "using as much detail as needed",
+        "using as much detail as the context supports",
+        "a plain-english explanation of that confidence",
     ]
     return (
         fallback_mode
         or any(p in answer for p in weak_phrases)
         or any(p in black_box for p in weak_phrases)
+        or any(p in confidence_reason for p in weak_phrases)
+        or any("one meaningful hidden assumption" in item for item in assumptions)
+        or any("meaningful hidden assumption or interpretation step" in item for item in assumptions)
+        or any("a meaningful caveat about where the answer may be too strong" in item for item in uncertainty_lines)
+        or any("one caveat saying where the answer may be too strong" in item for item in uncertainty_lines)
         or len(evidence) == 0
         or len(uncertainty) == 0
     )
@@ -294,6 +347,53 @@ def _build_client(model: str):
     )
 
 
+def _maybe_enrich_with_recursive_signals(result: dict, request: ExplainRequest) -> dict:
+    structured = parse_structured_context(request.context)
+    if not structured:
+        return result
+
+    settings = _load_settings()
+    analysis_id = str(uuid4())
+    store = AuditStore(Path(os.getenv("BBE_HISTORY_DB", str(DEFAULT_DB_PATH))))
+    client = AsyncOllamaClient(
+        base_url=settings.base_url,
+        model=settings.model,
+        api_key=settings.api_key,
+        timeout_seconds=settings.timeout_seconds,
+        embedding_model=os.getenv("BBE_EMBEDDING_MODEL", settings.model).strip(),
+    )
+    payload = {
+        "user_goal": (
+            "Explain which structured evidence signals the model answer appears to rely on, "
+            "miss, or overstate."
+        ),
+        "data": structured["data"],
+        "focus_columns": structured["focus_columns"],
+        "max_depth": 2,
+        "min_rows": 2,
+        "use_memory": True,
+        "use_llm": True,
+    }
+    try:
+        signal_result = asyncio.run(
+            run_analysis_workflow(
+                analysis_id=analysis_id,
+                request_payload=payload,
+                store=store,
+                ollama_client=client,
+                qdrant_url=os.getenv("BBE_QDRANT_URL", "").strip(),
+            )
+        )
+    except Exception as exc:
+        enriched = dict(result)
+        uncertainty = list(enriched.get("uncertainty") or [])
+        uncertainty.append(f"Recursive signal analysis was skipped because structured evidence failed to process: {exc}")
+        enriched["uncertainty"] = uncertainty[:4]
+        return enriched
+
+    signal_result["analysis_id"] = analysis_id
+    return enrich_explainer_result_with_signals(result, signal_result)
+
 app = FastAPI(title="Black Box Explainer API")
 app.add_middleware(
     CORSMiddleware,
@@ -302,10 +402,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(predictive_router)
 
 
 @app.get("/api/health")
-def health():
+async def health():
     settings = _load_settings()
     model, installed = _resolve_runtime_model(settings)
     client = _build_client(model)
@@ -321,6 +422,7 @@ def health():
         "models": MODEL_OPTIONS,
         "installedModels": installed,
         "critiquePass": settings.critique_pass,
+        "predictiveEngine": await predictive_health(),
     }
 
 
@@ -339,6 +441,7 @@ def config():
 
 @app.post("/api/explain")
 def explain(request: ExplainRequest):
+    started_at = time.time()
     settings = _load_settings()
     model, installed = _resolve_runtime_model(settings, request.model)
     client = _build_client(model)
@@ -346,6 +449,9 @@ def explain(request: ExplainRequest):
     question = request.question.strip()
     model_answer = request.model_answer.strip()
     context = request.context
+    has_structured_context = parse_structured_context(context) is not None
+    signal_hint = _pandas_signal_hint(context)
+    store = AuditStore(Path(os.getenv("BBE_HISTORY_DB", str(DEFAULT_DB_PATH))))
     cache_key = _cache_key_for_explain(
         model=model,
         question=question,
@@ -356,21 +462,46 @@ def explain(request: ExplainRequest):
         critique_pass=settings.critique_pass,
     )
     cached = EXPLAIN_CACHE.get(cache_key)
-    if cached is not None and not cached.get("fallback_mode"):
+    if cached is not None and not cached.get("fallback_mode") and not _result_is_weak(cached):
         cached["selected_model"] = model
         cached["cached"] = True
+        if _should_enable_signal_enrichment():
+            return _maybe_enrich_with_recursive_signals(cached, request)
         return cached
+    sqlite_cached = store.get_explain_cache(cache_key, EXPLAIN_CACHE_TTL_SECONDS)
+    if isinstance(sqlite_cached, dict) and not sqlite_cached.get("fallback_mode") and not _result_is_weak(sqlite_cached):
+        sqlite_cached["selected_model"] = model
+        sqlite_cached["cached"] = True
+        EXPLAIN_CACHE.set(cache_key, sqlite_cached)
+        if _should_enable_signal_enrichment():
+            return _maybe_enrich_with_recursive_signals(sqlite_cached, request)
+        return sqlite_cached
 
     try:
-        result = pipeline.run(
-            question=question,
-            model_answer=model_answer,
-            context=context,
-            temperature=settings.temperature,
-            max_tokens=settings.max_tokens,
-            critique_pass=settings.critique_pass,
-            completion_retry=settings.completion_retry,
-        )
+        use_agentic_explainer = _parse_bool(os.getenv("BBE_AGENTIC_EXPLAINER"), True)
+        if use_agentic_explainer:
+            result = pipeline.run_agentic(
+                question=question,
+                model_answer=model_answer,
+                context=context,
+                temperature=settings.temperature,
+                max_tokens=settings.max_tokens,
+                critique_pass=settings.critique_pass,
+                completion_retry=settings.completion_retry,
+                max_agent_loops=max(1, min(_parse_int(os.getenv("BBE_AGENTIC_LOOPS"), 2), 4)),
+                signal_hint=signal_hint,
+            )
+        else:
+            result = pipeline.run(
+                question=question,
+                model_answer=model_answer,
+                context=context,
+                temperature=settings.temperature,
+                max_tokens=settings.max_tokens,
+                critique_pass=settings.critique_pass,
+                completion_retry=settings.completion_retry,
+                signal_hint=signal_hint,
+            )
     except HTTPException:
         raise
     except Exception as exc:
@@ -384,22 +515,36 @@ def explain(request: ExplainRequest):
             error_message=str(exc),
         )
 
-    # Automatic rescue pass: if tiny model output is weak and a stronger local model exists, retry once.
-    if _result_is_weak(result):
+    # Stronger-model retry is optional because it can double end-to-end latency.
+    if _should_retry_stronger_model() and _result_is_weak(result):
         stronger = _next_stronger_model(model, installed)
         if stronger:
             stronger_client = _build_client(stronger)
             stronger_pipeline = ExplainerPipeline(stronger_client)
             try:
-                improved = stronger_pipeline.run(
-                    question=question,
-                    model_answer=model_answer,
-                    context=context,
-                    temperature=settings.temperature,
-                    max_tokens=settings.max_tokens,
-                    critique_pass=settings.critique_pass,
-                    completion_retry=settings.completion_retry,
-                )
+                if _parse_bool(os.getenv("BBE_AGENTIC_EXPLAINER"), True):
+                    improved = stronger_pipeline.run_agentic(
+                        question=question,
+                        model_answer=model_answer,
+                        context=context,
+                        temperature=settings.temperature,
+                        max_tokens=settings.max_tokens,
+                        critique_pass=settings.critique_pass,
+                        completion_retry=settings.completion_retry,
+                        max_agent_loops=max(1, min(_parse_int(os.getenv("BBE_AGENTIC_LOOPS"), 2), 4)),
+                        signal_hint=signal_hint,
+                    )
+                else:
+                    improved = stronger_pipeline.run(
+                        question=question,
+                        model_answer=model_answer,
+                        context=context,
+                        temperature=settings.temperature,
+                        max_tokens=settings.max_tokens,
+                        critique_pass=settings.critique_pass,
+                        completion_retry=settings.completion_retry,
+                        signal_hint=signal_hint,
+                    )
                 if not _result_is_weak(improved):
                     result = improved
                     model = stronger
@@ -408,43 +553,11 @@ def explain(request: ExplainRequest):
 
     result["selected_model"] = model
     result["cached"] = False
-    if not result.get("fallback_mode"):
+    result["response_ms"] = int((time.time() - started_at) * 1000)
+    if not result.get("fallback_mode") and not _result_is_weak(result):
         EXPLAIN_CACHE.set(cache_key, result)
+        store.set_explain_cache(cache_key, result)
+    if _should_enable_signal_enrichment():
+        result = _maybe_enrich_with_recursive_signals(result, request)
     return result
 
-
-@app.post("/api/followup")
-def followup(request: FollowupRequest):
-    settings = _load_settings()
-    model, _installed = _resolve_runtime_model(settings, request.model)
-    client = _build_client(model)
-
-    messages = [
-        {"role": "system", "content": FOLLOWUP_SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": (
-                f"Original question:\n{request.question.strip()}\n\n"
-                + (
-                    f"Model answer being audited:\n{request.model_answer.strip()}\n\n"
-                    if request.model_answer.strip()
-                    else ""
-                )
-                + (
-                f"Context:\n{request.context[:2000]}\n\n"
-                f"Follow-up question:\n{request.followup.strip()}"
-                )
-            ),
-        },
-    ]
-
-    try:
-        reply = client.chat(
-            messages=messages,
-            temperature=settings.temperature,
-            max_tokens=min(560, settings.max_tokens),
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"The follow-up request failed: {exc}") from exc
-
-    return {"reply": reply, "selected_model": model}

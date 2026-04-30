@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, TypedDict
 import re
 import requests
 
@@ -13,9 +13,29 @@ MAX_CONTEXT_CHARS_FOR_MODEL = 420
 FAST_RETRY_CONTEXT_CHARS = 220
 FAST_RETRY_MAX_TOKENS = 90
 LABEL_PATTERN = re.compile(
-    r"\b(ANSWER|BLACK_BOX|QUOTE|ASSUMPTION|UNCERTAINTY|CONFIDENCE_REASON|CONFIDENCE|FOLLOWUP|FOLLOW_UP)\s*:",
+    r"\b(ANSWER|BLACK_BOX|QUOTE|ASSUMPTION|UNCERTAINTY|CONFIDENCE_REASON|CONFIDENCE)\s*:",
     re.IGNORECASE,
 )
+
+
+class OllamaAgentClient:
+    def __init__(self, client):
+        self._client = client
+
+    def chat(
+        self,
+        *,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+        timeout_seconds: int | None = None,
+    ) -> str:
+        return self._client.chat(
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout_seconds=timeout_seconds,
+        )
 
 
 def _first_sentence(text: str) -> str:
@@ -26,15 +46,6 @@ def _first_sentence(text: str) -> str:
         if sep in clean:
             return clean.split(sep, 1)[0].strip()
     return clean[:180].strip()
-
-
-def _best_followup(question: str) -> str:
-    clean = " ".join(str(question or "").split()).strip()
-    if not clean:
-        return "What evidence would make this answer more trustworthy?"
-    if clean.endswith("?"):
-        return f"What evidence best supports the answer to: {clean}"
-    return f"What evidence best supports the answer to: {clean}?"
 
 
 def build_fallback_result(
@@ -75,7 +86,6 @@ def build_fallback_result(
     result["confidence_reason"] = (
         "Confidence is low because the explainer model failed during generation, so this result is only a fallback audit."
     )
-    result["followups"] = [_best_followup(question)]
 
     if context_text:
         quote = _first_sentence(context_text)[:220]
@@ -120,7 +130,6 @@ def parse_plaintext_fallback(text: str) -> Dict[str, Any]:
     parsed: Dict[str, Any] = {
         "assumptions": [],
         "uncertainty": [],
-        "followups": [],
         "evidence_claims": [],
     }
     current_key = ""
@@ -134,8 +143,6 @@ def parse_plaintext_fallback(text: str) -> Dict[str, Any]:
             "uncertainty": "uncertainty",
             "confidence": "confidence",
             "confidence_reason": "confidence_reason",
-            "followup": "followup",
-            "follow_up": "followup",
         }
         for index, match in enumerate(matches):
             raw_key = match.group(1).lower()
@@ -182,8 +189,6 @@ def parse_plaintext_fallback(text: str) -> Dict[str, Any]:
                     parsed["confidence_reason"] = remainder
             elif key == "confidence_reason":
                 parsed["confidence_reason"] = value
-            elif key == "followup":
-                parsed["followups"].append(value)
         return parsed
 
     for raw_line in text.splitlines():
@@ -203,8 +208,6 @@ def parse_plaintext_fallback(text: str) -> Dict[str, Any]:
                 "uncertainty",
                 "confidence",
                 "confidence_reason",
-                "followup",
-                "follow_up",
             }:
                 current_key = key
             else:
@@ -255,21 +258,22 @@ def parse_plaintext_fallback(text: str) -> Dict[str, Any]:
                 parsed["confidence_reason"] = remainder
         elif key == "confidence_reason":
             parsed["confidence_reason"] = value
-        elif key in {"followup", "follow_up"}:
-            parsed["followups"].append(value)
 
     return parsed
 
 
 def _clean_instruction_echo(result: Dict[str, Any]) -> Dict[str, Any]:
     cleaned = dict(result)
-    marker = re.compile(r"\b(BLACK_BOX|QUOTE|ASSUMPTION|UNCERTAINTY|CONFIDENCE_REASON|CONFIDENCE|FOLLOWUP|FOLLOW_UP|QUESTION)\s*:", re.IGNORECASE)
+    marker = re.compile(r"\b(BLACK_BOX|QUOTE|ASSUMPTION|UNCERTAINTY|CONFIDENCE_REASON|CONFIDENCE|QUESTION)\s*:", re.IGNORECASE)
     banned_fragments = [
         "return plain text in exactly this format",
         "a plain-english audit verdict in 1 to 3 clear sentences",
+        "explain in plain english how the model likely connected",
         "explain in plain english where the model likely focused",
-        "one short follow-up question, under 14 words",
         "exact quote copied verbatim from the context",
+        "one meaningful hidden assumption or interpretation step in 1 clear sentence",
+        "one meaningful caveat about where the answer may be too strong, too weak, or insufficiently supported in 1 clear sentence",
+        "a short, plain-english explanation of that confidence in 1 sentence",
     ]
     for field in ["answer", "black_box_explanation", "confidence_reason"]:
         value = str(cleaned.get(field, "") or "").strip()
@@ -296,7 +300,6 @@ def result_is_complete(result: Dict[str, Any]) -> bool:
             result.get("evidence_claims"),
             result.get("assumptions"),
             result.get("uncertainty"),
-            result.get("followups"),
         ]
     )
 
@@ -308,7 +311,7 @@ def merge_results(base: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]
         if not merged.get(key) and patch.get(key):
             merged[key] = patch[key]
 
-    for key in ["assumptions", "uncertainty", "followups", "evidence_claims"]:
+    for key in ["assumptions", "uncertainty", "evidence_claims"]:
         if not merged.get(key) and patch.get(key):
             merged[key] = patch[key]
 
@@ -332,8 +335,6 @@ def missing_fields(result: Dict[str, Any]) -> List[str]:
         missing.append("CONFIDENCE")
     if not (result.get("confidence_reason") or "").strip():
         missing.append("CONFIDENCE_REASON")
-    if not result.get("followups"):
-        missing.append("FOLLOWUP")
 
     return missing
 
@@ -345,7 +346,7 @@ def patch_from_field_text(field: str, text: str) -> Dict[str, Any]:
 
     parsed = parse_plaintext_fallback(clean)
     normalized = normalize_result(parsed)
-    if any(normalized.get(key) for key in ["answer", "black_box_explanation", "confidence", "confidence_reason", "assumptions", "uncertainty", "followups", "evidence_claims"]):
+    if any(normalized.get(key) for key in ["answer", "black_box_explanation", "confidence", "confidence_reason", "assumptions", "uncertainty", "evidence_claims"]):
         return normalized
 
     if field == "ANSWER":
@@ -375,78 +376,18 @@ def patch_from_field_text(field: str, text: str) -> Dict[str, Any]:
         return normalize_result({"confidence": clean})
     if field == "CONFIDENCE_REASON":
         return normalize_result({"confidence_reason": clean})
-    if field == "FOLLOWUP":
-        return normalize_result({"followups": [clean]})
 
     return {}
-
-
-def fill_missing_defaults(result: Dict[str, Any], question: str, context: str, model_answer: str = "") -> Dict[str, Any]:
-    patched = dict(result)
-
-    if not (patched.get("answer") or "").strip():
-        if model_answer.strip():
-            patched["answer"] = "The pasted answer may be directionally useful, but it still needs review."
-        else:
-            patched["answer"] = "The source does not support a confident answer yet."
-
-    if not (patched.get("black_box_explanation") or "").strip():
-        if model_answer.strip():
-            patched["black_box_explanation"] = (
-                "The model seems to have leaned on the main claim in the pasted answer, "
-                "but the full reasoning trace was incomplete."
-            )
-        else:
-            patched["black_box_explanation"] = (
-                "The model seems to have focused on the most obvious part of the source, "
-                "but the full reasoning trace was incomplete."
-            )
-
-    if not patched.get("assumptions"):
-        patched["assumptions"] = [
-            "This review assumes the pasted answer reflects the main claim the user wants checked."
-            if model_answer.strip()
-            else "This review assumes the source contains the main information needed to answer the question."
-        ]
-
-    if not patched.get("uncertainty"):
-        patched["uncertainty"] = [
-            "Some parts may still be under-supported because the model returned an incomplete explanation."
-        ]
-
-    if not patched.get("followups"):
-        patched["followups"] = [_best_followup(question)]
-
-    if not (patched.get("confidence") or "").strip():
-        patched["confidence"] = "low"
-
-    if not (patched.get("confidence_reason") or "").strip():
-        patched["confidence_reason"] = "Confidence is limited because the model returned incomplete structured output."
-
-    if not patched.get("evidence_claims") and context.strip():
-        quote = _first_sentence(context)[:220]
-        if quote:
-            patched["evidence_claims"] = [
-                {
-                    "claim": "Closest available source snippet",
-                    "support_reason": "The model did not return a full evidence extraction, so the app surfaced a simple source snippet.",
-                    "quote": quote,
-                    "start": None,
-                    "end": None,
-                    "verified": False,
-                }
-            ]
-
-    return normalize_result(patched)
 
 
 class ExplainerPipeline:
     def __init__(self, client):
         self.client = client
+        self.agent_client = OllamaAgentClient(client)
 
     def _chat(self, messages: List[Dict[str, str]], temperature: float, max_tokens: int, timeout_seconds: int | None = None) -> str:
-        return self.client.chat(
-            messages,
+        return self.agent_client.chat(
+            messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             timeout_seconds=timeout_seconds,
@@ -472,6 +413,12 @@ class ExplainerPipeline:
                 timeout_seconds=max(self.client.timeout_seconds, 35),
             )
 
+    def _compose_context_with_signals(self, context: str, signal_hint: str) -> str:
+        signal_text = " ".join(str(signal_hint or "").split()).strip()
+        if not signal_text:
+            return context
+        return f"{context}\n\nSTRUCTURED_SIGNALS:\n{signal_text}".strip()
+
     def _run_completion_retry(self, question: str, context: str, prior_output: str, missing: List[str], model_answer: str = "") -> str:
         answer_hint = (
             "ANSWER: a direct answer to the question in 1 to 3 simple sentences"
@@ -483,11 +430,6 @@ class ExplainerPipeline:
             if not model_answer.strip()
             else "BLACK_BOX: explain in plain English where the model likely focused, what it overweighted or missed, and why that produced the model answer in 2 to 3 simple sentences"
         )
-        followup_hint = (
-            "FOLLOWUP: one short follow-up question, under 14 words, ending with a question mark, that would help a user test or improve the answer"
-            if not model_answer.strip()
-            else "FOLLOWUP: one short follow-up question, under 14 words, ending with a question mark, that would help a user test or improve the model answer"
-        )
         field_hints = {
             "ANSWER": answer_hint,
             "BLACK_BOX": black_box_hint,
@@ -496,7 +438,6 @@ class ExplainerPipeline:
             "UNCERTAINTY": "UNCERTAINTY: one caveat saying where the answer may be too strong, too weak, or under-supported in 1 simple sentence",
             "CONFIDENCE": "CONFIDENCE: low, medium, or high",
             "CONFIDENCE_REASON": "CONFIDENCE_REASON: a short plain-English explanation of that confidence in 1 sentence",
-            "FOLLOWUP": followup_hint,
         }
         missing_lines = "\n".join(field_hints[field] for field in missing)
         model_answer_block = f"MODEL_ANSWER:\n{model_answer}\n\n" if model_answer.strip() else ""
@@ -538,13 +479,15 @@ class ExplainerPipeline:
         critique_pass: bool = False,
         completion_retry: bool = False,
         model_answer: str = "",
+        signal_hint: str = "",
     ) -> Dict[str, Any]:
         steps = ["llm_primary_call", "parse_plaintext", "verify_evidence", "detect_answer_overreach", "adjust_confidence", "build_confidence_breakdown"]
         raw_text = ""
-        context_for_model = context
+        effective_context = self._compose_context_with_signals(context, signal_hint)
+        context_for_model = effective_context
         trimmed_context = False
 
-        chunks = chunk_text(context, max_chars=MAX_CONTEXT_CHARS_FOR_MODEL, overlap=0)
+        chunks = chunk_text(effective_context, max_chars=MAX_CONTEXT_CHARS_FOR_MODEL, overlap=0)
         if chunks:
             context_for_model = chunks[0]
             trimmed_context = len(context_for_model) < len(context)
@@ -569,24 +512,23 @@ class ExplainerPipeline:
             result = merge_results(result, retry_result)
 
         if not result_is_complete(result):
-            steps.append("fill_missing_defaults")
-            result = fill_missing_defaults(result, question, context, model_answer=model_answer)
+            raise ValueError("Model returned incomplete structured output after retry.")
 
-        result = verify_evidence_claims(result, context)
+        result = verify_evidence_claims(result, effective_context)
         result = add_question_relevance(result, question)
         if model_answer.strip():
             original_answer = result.get("answer", "")
             result["audited_answer"] = model_answer
             result["audit_verdict"] = original_answer
             result["answer"] = model_answer
-            result = detect_answer_overreach(result, question, context)
+            result = detect_answer_overreach(result, question, effective_context)
             result["answer"] = original_answer
         else:
-            result = detect_answer_overreach(result, question, context)
+            result = detect_answer_overreach(result, question, effective_context)
         result = adjust_confidence(result)
         result = build_confidence_breakdown(result)
 
-        result["highlighted_context"] = build_highlighted_context(context, result.get("evidence_claims", []))
+        result["highlighted_context"] = build_highlighted_context(effective_context, result.get("evidence_claims", []))
         result["trace_log"] = build_trace_log(
             backend_meta=self.client.metadata(),
             temperature=temperature,
@@ -595,3 +537,189 @@ class ExplainerPipeline:
             raw_preview=raw_text[:500] if raw_text else "",
         )
         return result
+
+    def _finalize_result(self, result: Dict[str, Any], *, question: str, context: str, model_answer: str) -> Dict[str, Any]:
+        finalized = dict(result)
+        finalized = verify_evidence_claims(finalized, context)
+        finalized = add_question_relevance(finalized, question)
+        if model_answer.strip():
+            original_answer = finalized.get("answer", "")
+            finalized["audited_answer"] = model_answer
+            finalized["audit_verdict"] = original_answer
+            finalized["answer"] = model_answer
+            finalized = detect_answer_overreach(finalized, question, context)
+            finalized["answer"] = original_answer
+        else:
+            finalized = detect_answer_overreach(finalized, question, context)
+        finalized = adjust_confidence(finalized)
+        finalized = build_confidence_breakdown(finalized)
+        finalized["highlighted_context"] = build_highlighted_context(context, finalized.get("evidence_claims", []))
+        return finalized
+
+    def _judge_quality(self, *, question: str, model_answer: str, result: Dict[str, Any]) -> bool:
+        if not result_is_complete(result):
+            return False
+        answer = str(result.get("answer") or "")
+        explanation = str(result.get("black_box_explanation") or "")
+        if len(answer.strip()) < 25 or len(explanation.strip()) < 30:
+            return False
+        if not model_answer.strip():
+            return True
+        judge_prompt = (
+            "Return one token only: PASS or FAIL.\n"
+            "PASS only if the audit clearly evaluates the model answer against the question with concrete reasoning.\n\n"
+            f"Question:\n{question}\n\n"
+            f"Model answer under audit:\n{model_answer[:1200]}\n\n"
+            f"Audit answer:\n{answer[:1200]}\n\n"
+            f"Audit explanation:\n{explanation[:1200]}\n"
+        )
+        try:
+            judged = self._chat(
+                [{"role": "user", "content": judge_prompt}],
+                temperature=0.0,
+                max_tokens=8,
+                timeout_seconds=max(self.client.timeout_seconds, 20),
+            )
+            return "PASS" in str(judged or "").upper()
+        except Exception:
+            return True
+
+    def run_agentic(
+        self,
+        question: str,
+        context: str,
+        temperature: float,
+        max_tokens: int,
+        critique_pass: bool = False,
+        completion_retry: bool = False,
+        model_answer: str = "",
+        max_agent_loops: int = 2,
+        signal_hint: str = "",
+    ) -> Dict[str, Any]:
+        class AgentState(TypedDict, total=False):
+            attempts: int
+            steps: List[str]
+            raw_text: str
+            parsed: Dict[str, Any]
+            missing: List[str]
+            quality_ok: bool
+
+        effective_context = self._compose_context_with_signals(context, signal_hint)
+
+        def _trimmed_context() -> str:
+            chunks = chunk_text(effective_context, max_chars=MAX_CONTEXT_CHARS_FOR_MODEL, overlap=0)
+            return chunks[0] if chunks else effective_context
+
+        try:
+            from langgraph.graph import END, START, StateGraph
+        except ImportError:
+            return self.run(
+                question=question,
+                    context=context,
+                    signal_hint=signal_hint,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                critique_pass=critique_pass,
+                completion_retry=completion_retry,
+                model_answer=model_answer,
+            )
+
+        context_for_model = _trimmed_context()
+
+        def generate_primary(state: AgentState) -> AgentState:
+            steps = list(state.get("steps", []))
+            steps.append("agent_generate_primary")
+            raw = self._run_plaintext_chat(
+                question=question,
+                context=context_for_model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                steps=steps,
+                model_answer=model_answer,
+            )
+            parsed = _clean_instruction_echo(normalize_result(parse_plaintext_fallback(raw)))
+            return {
+                "attempts": int(state.get("attempts", 0)) + 1,
+                "steps": steps,
+                "raw_text": raw,
+                "parsed": parsed,
+                "missing": missing_fields(parsed),
+            }
+
+        def evaluate_quality(state: AgentState) -> AgentState:
+            steps = list(state.get("steps", []))
+            steps.append("agent_evaluate_quality")
+            parsed = dict(state.get("parsed", {}))
+            missing = list(state.get("missing", []))
+            quality_ok = not missing and self._judge_quality(
+                question=question,
+                model_answer=model_answer,
+                result=parsed,
+            )
+            return {"steps": steps, "quality_ok": quality_ok}
+
+        def repair_output(state: AgentState) -> AgentState:
+            steps = list(state.get("steps", []))
+            steps.append("agent_repair_output")
+            parsed = dict(state.get("parsed", {}))
+            raw_text = str(state.get("raw_text", ""))
+            missing = list(state.get("missing", []))
+            if completion_retry and missing:
+                retry_text = self._run_completion_retry(
+                    question=question,
+                    context=context_for_model,
+                    prior_output=raw_text,
+                    missing=missing,
+                    model_answer=model_answer,
+                )
+                patch = _clean_instruction_echo(normalize_result(parse_plaintext_fallback(retry_text)))
+                parsed = merge_results(parsed, patch)
+                raw_text = f"{raw_text}\n{retry_text}".strip()
+            return {
+                "attempts": int(state.get("attempts", 0)) + 1,
+                "steps": steps,
+                "raw_text": raw_text,
+                "parsed": parsed,
+                "missing": missing_fields(parsed),
+            }
+
+        def finalize(state: AgentState) -> AgentState:
+            steps = list(state.get("steps", []))
+            steps.append("agent_finalize")
+            parsed = dict(state.get("parsed", {}))
+            if not result_is_complete(parsed):
+                raise ValueError("Model returned incomplete structured output after retry.")
+            result = self._finalize_result(parsed, question=question, context=effective_context, model_answer=model_answer)
+            result["trace_log"] = build_trace_log(
+                backend_meta=self.client.metadata(),
+                temperature=temperature,
+                max_tokens=max_tokens,
+                steps=steps,
+                raw_preview=str(state.get("raw_text", ""))[:500],
+            )
+            return {"parsed": result, "steps": steps}
+
+        def route_after_quality(state: AgentState) -> str:
+            if state.get("quality_ok"):
+                return "finalize"
+            if int(state.get("attempts", 0)) >= max(1, max_agent_loops):
+                return "finalize"
+            return "repair_output"
+
+        def route_after_repair(state: AgentState) -> str:
+            return "evaluate_quality"
+
+        graph = StateGraph(AgentState)
+        graph.add_node("generate_primary", generate_primary)
+        graph.add_node("evaluate_quality", evaluate_quality)
+        graph.add_node("repair_output", repair_output)
+        graph.add_node("finalize", finalize)
+        graph.add_edge(START, "generate_primary")
+        graph.add_edge("generate_primary", "evaluate_quality")
+        graph.add_conditional_edges("evaluate_quality", route_after_quality, {"finalize": "finalize", "repair_output": "repair_output"})
+        graph.add_conditional_edges("repair_output", route_after_repair, {"evaluate_quality": "evaluate_quality"})
+        graph.add_edge("finalize", END)
+
+        compiled = graph.compile()
+        state = compiled.invoke({"attempts": 0, "steps": []})
+        return dict(state.get("parsed", {}))

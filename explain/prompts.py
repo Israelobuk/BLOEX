@@ -36,11 +36,6 @@ def build_plaintext_fallback_prompt(question: str, context: str, model_answer: s
     uncertainty_line = (
         "UNCERTAINTY: one meaningful caveat about where the answer may be too strong, too weak, or insufficiently supported in 1 clear sentence"
     )
-    followup_line = (
-        "FOLLOWUP: one short follow-up question, under 14 words, ending with a question mark, that would help a user test or improve the answer"
-        if not model_answer.strip()
-        else "FOLLOWUP: one short follow-up question, under 14 words, ending with a question mark, that would help a user test or improve the model answer"
-    )
 
     return f"""{_base_sections(question, context, model_answer)}
 
@@ -52,7 +47,6 @@ ASSUMPTION: one meaningful hidden assumption or interpretation step in 1 clear s
 {uncertainty_line}
 CONFIDENCE: low, medium, or high
 CONFIDENCE_REASON: a short, plain-English explanation of that confidence in 1 sentence
-{followup_line}
 
 Write for a curious user, not for a professor.
 Avoid sounding academic, robotic, or overly polished.
