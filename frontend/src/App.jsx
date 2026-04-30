@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8001").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
+function apiUrl(path) {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+}
 const TABS = [
   { key: "answer", label: "Answer" },
   { key: "black_box_explanation", label: "Why The Model Said It" },
@@ -179,7 +183,7 @@ export default function App() {
 
     async function bootstrap() {
       try {
-        const healthResponse = await fetch(`${API_BASE_URL}/api/health`);
+        const healthResponse = await fetch(apiUrl("/api/health"));
         const health = await readJsonResponse(healthResponse);
 
         if (cancelled) {
@@ -227,7 +231,7 @@ export default function App() {
     }
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/explain`, {
+      const response = await fetch(apiUrl("/api/explain"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
